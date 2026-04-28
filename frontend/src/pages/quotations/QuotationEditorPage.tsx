@@ -127,13 +127,7 @@ function newLine(): QLine {
   return { _key: crypto.randomUUID(), description: '', qty: '', unitPrice: '', amount: '' }
 }
 
-// ── Pagination: estimate rows a line occupies ─────────────────────
-function estimateRows(line: QLine): number {
-  const chars = (line.description || '').length
-  if (chars <= 70) return 1
-  if (chars <= 140) return 2
-  return Math.ceil(chars / 70)
-}
+// Estimation logic removed
 
 function buildPages(lines: QLine[]): QLine[][] {
   const pages: QLine[][] = []

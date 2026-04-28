@@ -23,7 +23,7 @@ import POPage from '@/pages/requirements/POPage'
 import InvoicePage from '@/pages/requirements/InvoicePage'
 import VendorPortalPage from '@/pages/vendors/VendorPortalPage'
 import VendorCatalogPage from '@/pages/vendors/VendorCatalogPage'
-import EstimationPage from '@/pages/requirements/EstimationPage'
+// ...existing code...
 
 import AddCustomerPage from '@/pages/AddCustomerPage'
 import ProjectsShowcasePage from '@/pages/ProjectsShowcasePage'
@@ -161,10 +161,7 @@ function LeftSidebar() {
           <Package className="w-4 h-4 flex-shrink-0" />
           Vendors
         </NavLink>
-        <NavLink to="/estimation" className={linkCls}>
-          <TrendingUp className="w-4 h-4 flex-shrink-0" />
-          Estimation
-        </NavLink>
+        {/* Estimation nav removed */}
         <NavLink to="/add-customer" className={linkCls}>
           <Building2 className="w-4 h-4 flex-shrink-0" />
           Customers
@@ -247,7 +244,7 @@ export default function App() {
                       <Route path="/requirement/:id/po" element={<POPage />} />
                       <Route path="/requirement/:id/invoice" element={<InvoicePage />} />
                       <Route path="/vendors" element={<VendorCatalogPage />} />
-                      <Route path="/estimation" element={<EstimationPage />} />
+                      {/* Estimation route removed */}
                       <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route path="/quotations" element={<QuotationsListPage />} />
                       <Route path="/quotations/new" element={<QuotationEditorPage />} />

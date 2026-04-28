@@ -60,7 +60,7 @@ export default function VendorPortalPage() {
             <p className="text-xs text-gray-400 font-mono mb-1">RFQ-{rfqId?.slice(-6).toUpperCase()}</p>
             <h2 className="text-base font-semibold text-gray-900">Submit your quotation</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Please provide unit prices and estimated lead times for each item below.
+              Please provide unit prices for each item below.
             </p>
           </div>
 
