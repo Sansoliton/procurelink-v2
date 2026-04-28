@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ProcureLink — Multi-Tenant Plan + Open Source Stack</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fafbfc;--surface:#ffffff;--surface2:#f4f6f9;--surface3:#edf0f5;
+  --border:#e1e5ed;--border2:#d0d6e0;
+  --ink:#141920;--ink2:#4b5568;--ink3:#9aa3b2;
+  --blue:#2563eb;--blue-l:#eff4ff;--blue-d:#1d4ed8;
+  --green:#059669;--green-l:#ecfdf5;
+  --amber:#d97706;--amber-l:#fffbeb;
+  --purple:#7c3aed;--purple-l:#f5f3ff;
+  --teal:#0891b2;--teal-l:#ecfeff;
+  --red:#dc2626;--red-l:#fef2f2;
+  --orange:#ea580c;--orange-l:#fff7ed;
+  --mono:'Fira Code',monospace;
+  --r:10px;
+}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--ink);padding:24px 16px;min-height:100vh}
+.shell{max-width:920px;margin:0 auto}
+
+/* Header */
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+.logo{font-size:24px;font-weight:800;letter-spacing:-0.8px}
+.logo-accent{color:var(--blue)}
+.tag{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--blue-l);color:var(--blue);border:1px solid #bfdbfe;font-family:var(--mono)}
+.subtitle{font-size:13px;color:var(--ink2);line-height:1.7;margin-bottom:22px;max-width:600px}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;background:var(--surface3);border-radius:var(--r);padding:3px;margin-bottom:20px;flex-wrap:wrap;border:1px solid var(--border)}
+.tb{font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 15px;border-radius:8px;border:none;cursor:pointer;background:transparent;color:var(--ink3);transition:all .15s;white-space:nowrap}
+.tb.on{background:var(--surface);color:var(--blue);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.pane{display:none}.pane.on{display:block}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:12px}
+.card2{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px}
+.card-title{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+/* Stat row */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+.stat-v{font-size:20px;font-weight:800;color:var(--ink);margin-bottom:2px}
+.stat-l{font-size:11px;color:var(--ink2);font-weight:500}
+.stat-s{font-size:10px;color:var(--ink3);margin-top:2px}
+
+/* Pills */
+.pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;border:1px solid;white-space:nowrap;display:inline-block}
+.pb{background:var(--blue-l);color:var(--blue);border-color:#bfdbfe}
+.pg{background:var(--green-l);color:var(--green);border-color:#a7f3d0}
+.pa{background:var(--amber-l);color:var(--amber);border-color:#fcd34d}
+.pp{background:var(--purple-l);color:var(--purple);border-color:#c4b5fd}
+.pt{background:var(--teal-l);color:var(--teal);border-color:#a5f3fc}
+.po{background:var(--orange-l);color:var(--orange);border-color:#fdba74}
+.pr{background:var(--red-l);color:var(--red);border-color:#fca5a5}
+
+/* Tenant architecture diagram */
+.tenant-diagram{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+.tenant-box{border-radius:10px;padding:14px;border:1px solid}
+.tenant-org{font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.tenant-user{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+.tenant-user:last-child{border-bottom:none}
+.user-dot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+
+/* Data isolation diagram */
+.isolation-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}
+.isolation-row:last-child{border-bottom:none}
+.iso-table{font-family:var(--mono);font-size:11px;min-width:160px;color:var(--blue)}
+.iso-strategy{flex:1;color:var(--ink2)}
+.iso-why{font-size:11px;color:var(--ink3)}
+
+/* Module grid */
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.mod-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.mod-card:hover{border-color:var(--border2);background:var(--surface)}
+.mod-card.on{border-left-color:var(--blue);background:var(--blue-l)}
+.mod-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mod-icon{font-size:16px}
+.mod-title{font-size:13px;font-weight:700;color:var(--ink)}
+.mod-desc{font-size:11px;color:var(--ink2);line-height:1.6}
+.mod-detail{background:var(--surface);border:1px solid #bfdbfe;border-radius:9px;padding:16px;margin-bottom:12px;display:none;animation:fi .15s ease}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Open source tools */
+.oss-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.oss-card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px;transition:all .15s}
+.oss-card:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(37,99,235,.08)}
+.oss-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+.oss-name{font-size:13px;font-weight:700;color:var(--ink)}
+.oss-repo{font-family:var(--mono);font-size:10px;color:var(--ink3);background:var(--surface2);padding:2px 7px;border-radius:4px;cursor:pointer;border:1px solid var(--border)}
+.oss-repo:hover{color:var(--blue);border-color:#bfdbfe}
+.oss-desc{font-size:11px;color:var(--ink2);line-height:1.6;margin-bottom:8px}
+.oss-use{font-size:11px;color:var(--blue);font-weight:600}
+.oss-stars{font-size:10px;color:var(--ink3);margin-top:4px}
+
+/* RBAC table */
+.rbac-grid{overflow-x:auto}
+.rbac-table{width:100%;border-collapse:collapse;font-size:11px;min-width:580px}
+.rbac-table th{padding:8px 10px;text-align:left;font-weight:700;font-size:10px;color:var(--ink3);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.05em;background:var(--surface2)}
+.rbac-table td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--ink2)}
+.rbac-table td:first-child{font-weight:600;color:var(--ink);font-family:var(--mono);font-size:11px}
+.rbac-table tr:hover td{background:var(--surface2)}
+.yes{color:var(--green);font-weight:700}
+.no{color:var(--ink3)}
+.own{color:var(--blue);font-weight:600}
+
+/* Sprint */
+.sprint-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.sprint-item:last-child{border-bottom:none}
+.s-num{font-family:var(--mono);font-size:11px;color:var(--ink3);min-width:64px;flex-shrink:0;padding-top:2px}
+.s-info{flex:1}
+.s-title{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:5px}
+.s-chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface3);color:var(--ink2);border:1px solid var(--border)}
+.chip.new{background:var(--blue-l);color:var(--blue);border-color:#bfdbfe}
+.s-pts{font-family:var(--mono);font-size:11px;color:var(--ink3);flex-shrink:0;padding-top:2px}
+
+/* Copilot */
+.prompt-wrap{margin-bottom:16px}
+.p-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.p-step{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--blue-l);color:var(--blue);border:1px solid #bfdbfe}
+.p-title{font-size:13px;font-weight:700;color:var(--ink);flex:1}
+.copy-btn{font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--ink3);transition:all .15s}
+.copy-btn:hover{border-color:var(--blue);color:var(--blue)}
+.p-desc{font-size:12px;color:var(--ink2);margin-bottom:8px}
+.pblock{background:#0d1117;color:#58d68d;font-family:var(--mono);font-size:11px;padding:14px;border-radius:8px;overflow-x:auto;line-height:1.8;white-space:pre-wrap;word-break:break-word;border:1px solid #21262d}
+
+/* DB schema highlight */
+.schema-block{background:#0d1117;color:#79c0ff;font-family:var(--mono);font-size:11px;padding:14px;border-radius:8px;line-height:1.8;overflow-x:auto;white-space:pre;margin-top:8px}
+.sk{color:#ff7b72}.sv{color:#a5d6ff}.sc{color:#6e7681}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="hdr">
+    <div class="logo">Procure<span class="logo-accent">Link</span></div>
+    <span class="tag">Multi-Tenant v2.0</span>
+  </div>
+  <p class="subtitle">Multi-organisation, multi-project, multi-user B2B procurement platform. Complete plan with open-source tooling for every layer.</p>
+
+  <div class="tabs">
+    <button class="tb on" onclick="tab('overview',this)">Overview</button>
+    <button class="tb" onclick="tab('multitenancy',this)">Multi-tenancy</button>
+    <button class="tb" onclick="tab('modules',this)">Modules</button>
+    <button class="tb" onclick="tab('datamodel',this)">Data model</button>
+    <button class="tb" onclick="tab('oss',this)">Open source tools</button>
+    <button class="tb" onclick="tab('sprints',this)">Sprint plan</button>
+    <button class="tb" onclick="tab('copilot',this)">Copilot prompts</button>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 1: OVERVIEW                     -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-overview" class="pane on">
+    <div class="stats">
+      <div class="stat"><div class="stat-v">∞</div><div class="stat-l">Organisations</div><div class="stat-s">fully isolated</div></div>
+      <div class="stat"><div class="stat-v">∞</div><div class="stat-l">Projects/org</div><div class="stat-s">per workspace</div></div>
+      <div class="stat"><div class="stat-v">5</div><div class="stat-l">User roles</div><div class="stat-s">per org per project</div></div>
+      <div class="stat"><div class="stat-v">9</div><div class="stat-l">Core modules</div><div class="stat-s">fully decoupled</div></div>
+      <div class="stat"><div class="stat-v">22 wk</div><div class="stat-l">Timeline</div><div class="stat-s">11 sprints × 2wk</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">What changed from v1 → v2 (multi-tenant)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="card2">
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px">v1 — Single tenant</div>
+          <div style="font-size:11px;color:var(--ink2);line-height:2">
+            ✗ One organisation hardcoded<br>
+            ✗ No project concept<br>
+            ✗ Users see all requirements<br>
+            ✗ One vendor catalog globally<br>
+            ✗ No workspace isolation<br>
+            ✗ No subscription/plan tiers<br>
+            ✗ Single admin for everything
+          </div>
+        </div>
+        <div class="card2">
+          <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px">v2 — Multi-tenant</div>
+          <div style="font-size:11px;color:var(--ink2);line-height:2">
+            ✓ Unlimited organisations (tenants)<br>
+            ✓ Projects scoped to org<br>
+            ✓ Row-level data isolation<br>
+            ✓ Vendor catalog per org<br>
+            ✓ Project-level permissions<br>
+            ✓ Subscription plan support<br>
+            ✓ Super-admin + org-admin roles
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Core concept — Org → Projects → Users</div>
+      <div class="tenant-diagram">
+        <div class="tenant-box" style="background:#eff4ff;border-color:#bfdbfe">
+          <div class="tenant-org" style="color:var(--blue)">🏢 Acme Corp <span class="pill pb">customer org</span></div>
+          <div style="font-size:10px;color:var(--ink3);margin-bottom:6px;font-family:var(--mono)">Projects: 4 active</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#dbeafe;color:var(--blue)">JD</div>John (org-admin)</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#dbeafe;color:var(--blue)">SS</div>Sarah (buyer)</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#dbeafe;color:var(--blue)">MK</div>Mike (viewer)</div>
+        </div>
+        <div class="tenant-box" style="background:#f5f3ff;border-color:#c4b5fd">
+          <div class="tenant-org" style="color:var(--purple)">🏭 FastFix Supply <span class="pill pp">vendor org</span></div>
+          <div style="font-size:10px;color:var(--ink3);margin-bottom:6px;font-family:var(--mono)">Active RFQs: 12</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#ede9fe;color:var(--purple)">AL</div>Alice (vendor-admin)</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#ede9fe;color:var(--purple)">BR</div>Bob (quote-submitter)</div>
+        </div>
+        <div class="tenant-box" style="background:#ecfdf5;border-color:#a7f3d0">
+          <div class="tenant-org" style="color:var(--green)">⚙️ ProcureLink Ops <span class="pill pg">internal org</span></div>
+          <div style="font-size:10px;color:var(--ink3);margin-bottom:6px;font-family:var(--mono)">System-wide visibility</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#d1fae5;color:var(--green)">SA</div>Super-admin</div>
+          <div class="tenant-user"><div class="user-dot" style="background:#d1fae5;color:var(--green)">OP</div>Ops user</div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--ink2);line-height:2;background:var(--surface2);border-radius:8px;padding:12px;font-family:var(--mono)">
+        organisation ──── 1:many ──▶  projects<br>
+        organisation ──── 1:many ──▶  users (with org role)<br>
+        project      ──── 1:many ──▶  requirements<br>
+        project      ──── 1:many ──▶  project_members (user + project role)<br>
+        project      ──── 1:many ──▶  rfqs, quotations, pos, invoices<br>
+        organisation ──── 1:many ──▶  vendor_catalog (org-scoped vendors)
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">5 user roles</div>
+      <div class="rbac-grid">
+        <table class="rbac-table">
+          <thead>
+            <tr><th>Action</th><th>super-admin</th><th>org-admin</th><th>buyer</th><th>vendor-user</th><th>viewer</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Manage all orgs</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Manage org users</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Create projects</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Submit requirements</td><td class="yes">✓</td><td class="yes">✓</td><td class="own">own projects</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Send RFQs</td><td class="yes">✓</td><td class="yes">✓</td><td class="own">own projects</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Approve quotation</td><td class="yes">✓</td><td class="yes">✓</td><td class="own">own projects</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Submit vendor quote</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+            <tr><td>View only</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+            <tr><td>Manage vendor catalog</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+            <tr><td>Override margin</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 2: MULTI-TENANCY               -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-multitenancy" class="pane">
+    <div class="card">
+      <div class="card-title">Tenancy strategy — Shared DB, Row-Level Isolation</div>
+      <div class="card2" style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:6px">Decision: Single DB + org_id on every table</div>
+        <div style="font-size:11px;color:var(--ink2);line-height:1.8">Every table that holds business data has an <span style="color:var(--blue);font-family:var(--mono)">org_id</span> column. Every query in every repository automatically filters by the current user's org_id. This is enforced at the service layer — not the router — so it cannot be bypassed.</div>
+      </div>
+      <div class="isolation-row">
+        <span class="iso-table">organisations</span>
+        <span class="iso-strategy">Master tenant registry. One row per company.</span>
+        <span class="iso-why">No isolation needed — parent table</span>
+      </div>
+      <div class="isolation-row">
+        <span class="iso-table">projects</span>
+        <span class="iso-strategy">org_id FK + enforced in all queries</span>
+        <span class="iso-why">Projects visible only within org</span>
+      </div>
+      <div class="isolation-row">
+        <span class="iso-table">requirements</span>
+        <span class="iso-strategy">project_id FK + org_id FK (denormalised for fast filter)</span>
+        <span class="iso-why">Fast tenant scoping without join</span>
+      </div>
+      <div class="isolation-row">
+        <span class="iso-table">vendors</span>
+        <span class="iso-strategy">org_id FK — each org has its own vendor catalog</span>
+        <span class="iso-why">Orgs don't share vendor lists</span>
+      </div>
+      <div class="isolation-row">
+        <span class="iso-table">rfqs, quotations, po, invoices</span>
+        <span class="iso-strategy">Chained via project_id → org_id is always reachable</span>
+        <span class="iso-why">Deep records inherit tenant from project</span>
+      </div>
+      <div class="isolation-row">
+        <span class="iso-table">audit_logs</span>
+        <span class="iso-strategy">org_id + user_id on every audit entry</span>
+        <span class="iso-why">Full cross-tenant audit for super-admin</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Project concept — what a project scopes</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="card2" style="margin-bottom:0">
+          <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:6px">Project owns</div>
+          <div style="font-size:11px;color:var(--ink2);line-height:2;font-family:var(--mono)">requirements<br>line_items<br>rfqs<br>quote_lines<br>quotations<br>purchase_orders<br>invoices<br>project_members</div>
+        </div>
+        <div class="card2" style="margin-bottom:0">
+          <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">Org owns</div>
+          <div style="font-size:11px;color:var(--ink2);line-height:2;font-family:var(--mono)">users<br>vendor_catalog<br>projects<br>org_settings<br>subscription<br>audit_logs<br>email_templates</div>
+        </div>
+        <div class="card2" style="margin-bottom:0">
+          <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px">Project members</div>
+          <div style="font-size:11px;color:var(--ink2);line-height:2">
+            User can be in<br>multiple projects<br>with different roles<br>per project.<br><br>
+            e.g. John = buyer<br>in Project A, but<br>viewer in Project B.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Enforcement pattern — every repo call is tenant-scoped</div>
+      <div class="schema-block"><span class="sc"># repository pattern — NEVER query without org_id</span>
+<span class="sk">class</span> <span class="sv">RequirementRepo</span>:
+    <span class="sk">def</span> list_by_project(self, project_id: str, org_id: str, db: Session):
+        <span class="sc"># org_id always enforced — even if project_id is guessed</span>
+        <span class="sk">return</span> db.query(Requirement).filter(
+            Requirement.project_id == project_id,
+            Requirement.org_id == org_id   <span class="sc"># ← tenant guard</span>
+        ).all()
+
+    <span class="sk">def</span> get_by_id(self, req_id: str, org_id: str, db: Session):
+        req = db.get(Requirement, req_id)
+        <span class="sk">if not</span> req <span class="sk">or</span> req.org_id != org_id:
+            <span class="sk">raise</span> HTTPException(404)  <span class="sc"># never expose 403 to prevent enumeration</span>
+        <span class="sk">return</span> req
+
+<span class="sc"># service injects org_id from current_user — never from request body</span>
+<span class="sk">def</span> <span class="sv">get_requirement</span>(req_id: str, current_user: User, db: Session):
+    <span class="sk">return</span> repo.get_by_id(req_id, current_user.org_id, db)</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 3: MODULES                      -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-modules" class="pane">
+    <div class="mod-grid">
+      <div class="mod-card" onclick="showMod('m1')" id="mc-m1"><div class="mod-head"><span class="mod-icon">🏢</span><span class="mod-title">Org & Project module</span></div><div class="mod-desc">NEW — Organisation registration, project creation, member management, settings</div></div>
+      <div class="mod-card" onclick="showMod('m2')" id="mc-m2"><div class="mod-head"><span class="mod-icon">🔐</span><span class="mod-title">Auth & RBAC module</span></div><div class="mod-desc">JWT + roles at org level and project level, invite system, session management</div></div>
+      <div class="mod-card" onclick="showMod('m3')" id="mc-m3"><div class="mod-head"><span class="mod-icon">📋</span><span class="mod-title">Requirements module</span></div><div class="mod-desc">Multi-project requirements — scoped per org and project, editable line items</div></div>
+      <div class="mod-card" onclick="showMod('m4')" id="mc-m4"><div class="mod-head"><span class="mod-icon">🏭</span><span class="mod-title">Vendor module</span></div><div class="mod-desc">Per-org vendor catalog — each org manages its own supplier list</div></div>
+      <div class="mod-card" onclick="showMod('m5')" id="mc-m5"><div class="mod-head"><span class="mod-icon">📨</span><span class="mod-title">RFQ module</span></div><div class="mod-desc">RFQ dispatch, tracking, vendor portal — all scoped to project + org</div></div>
+      <div class="mod-card" onclick="showMod('m6')" id="mc-m6"><div class="mod-head"><span class="mod-icon">📊</span><span class="mod-title">Quote module</span></div><div class="mod-desc">Quote comparison, best-mix selection, margin rules per org</div></div>
+      <div class="mod-card" onclick="showMod('m7')" id="mc-m7"><div class="mod-head"><span class="mod-icon">🛒</span><span class="mod-title">PO & Invoice module</span></div><div class="mod-desc">Purchase orders, invoicing, payment tracking, multi-format export</div></div>
+      <div class="mod-card" onclick="showMod('m8')" id="mc-m8"><div class="mod-head"><span class="mod-icon">🔔</span><span class="mod-title">Notifications module</span></div><div class="mod-desc">NEW — In-app notifications + email digests per user, per project, per event</div></div>
+      <div class="mod-card" onclick="showMod('m9')" id="mc-m9"><div class="mod-head"><span class="mod-icon">📈</span><span class="mod-title">Analytics module</span></div><div class="mod-desc">NEW — Per-org dashboards: spend by project, vendor performance, cycle times</div></div>
+    </div>
+    <div id="mod-detail-panel"></div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 4: DATA MODEL                   -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-datamodel" class="pane">
+    <div class="card">
+      <div class="card-title">New tables (multi-tenant additions)</div>
+      <div class="schema-block"><span class="sk">-- Tenant root</span>
+organisations(<span class="sv">id</span> UUID PK, <span class="sv">name</span> VARCHAR, <span class="sv">slug</span> VARCHAR UNIQUE,
+              <span class="sv">type</span> ENUM(customer,vendor,internal), <span class="sv">plan</span> ENUM(free,pro,enterprise),
+              <span class="sv">settings</span> JSONB, <span class="sv">created_at</span> TIMESTAMPTZ)
+
+<span class="sk">-- Project workspace (NEW)</span>
+projects(<span class="sv">id</span> UUID PK, <span class="sv">org_id</span> FK → organisations,
+         <span class="sv">name</span> VARCHAR, <span class="sv">description</span> TEXT, <span class="sv">status</span> ENUM(active,archived),
+         <span class="sv">settings</span> JSONB, <span class="sv">created_by</span> FK → users, <span class="sv">created_at</span> TIMESTAMPTZ)
+
+<span class="sk">-- User with org role</span>
+users(<span class="sv">id</span> UUID PK, <span class="sv">org_id</span> FK → organisations,
+      <span class="sv">email</span> VARCHAR UNIQUE, <span class="sv">hashed_password</span> VARCHAR,
+      <span class="sv">org_role</span> ENUM(super-admin,org-admin,member), <span class="sv">is_active</span> BOOL,
+      <span class="sv">invited_by</span> FK → users, <span class="sv">last_login</span> TIMESTAMPTZ, <span class="sv">created_at</span> TIMESTAMPTZ)
+
+<span class="sk">-- Fine-grained project membership (NEW)</span>
+project_members(<span class="sv">id</span> UUID PK, <span class="sv">project_id</span> FK → projects, <span class="sv">user_id</span> FK → users,
+                <span class="sv">project_role</span> ENUM(buyer,viewer), <span class="sv">added_at</span> TIMESTAMPTZ)
+UNIQUE(project_id, user_id)
+
+<span class="sk">-- Per-org vendor catalog (was global)</span>
+vendors(<span class="sv">id</span> UUID PK, <span class="sv">org_id</span> FK → organisations,  <span class="sc">← NEW column</span>
+        <span class="sv">name</span>, <span class="sv">email</span>, <span class="sv">categories</span> TEXT[], <span class="sv">rating</span> FLOAT, <span class="sv">is_active</span> BOOL)
+
+<span class="sk">-- Requirements now belong to a project</span>
+requirements(<span class="sv">id</span> UUID PK, <span class="sv">org_id</span> FK, <span class="sv">project_id</span> FK → projects,  <span class="sc">← project_id NEW</span>
+             <span class="sv">created_by</span> FK → users,  <span class="sc">← created_by NEW</span>
+             <span class="sv">project_name</span> VARCHAR, <span class="sv">raw_text</span> TEXT, <span class="sv">file_path</span>, <span class="sv">status</span> ENUM(...),
+             <span class="sv">delivery_date</span> DATE, <span class="sv">created_at</span> TIMESTAMPTZ)
+
+<span class="sk">-- Notifications (NEW)</span>
+notifications(<span class="sv">id</span> UUID PK, <span class="sv">org_id</span> FK, <span class="sv">user_id</span> FK, <span class="sv">project_id</span> FK,
+              <span class="sv">type</span> VARCHAR, <span class="sv">title</span> VARCHAR, <span class="sv">body</span> TEXT,
+              <span class="sv">entity_type</span> VARCHAR, <span class="sv">entity_id</span> UUID,
+              <span class="sv">is_read</span> BOOL DEFAULT false, <span class="sv">created_at</span> TIMESTAMPTZ)
+
+<span class="sk">-- Invitations (NEW)</span>
+invitations(<span class="sv">id</span> UUID PK, <span class="sv">org_id</span> FK, <span class="sv">email</span> VARCHAR, <span class="sv">org_role</span> ENUM,
+            <span class="sv">token</span> VARCHAR UNIQUE, <span class="sv">expires_at</span> TIMESTAMPTZ, <span class="sv">accepted_at</span> TIMESTAMPTZ)
+
+<span class="sk">-- All existing tables unchanged except:</span>
+<span class="sc">-- line_items, rfqs, quote_lines, quotations, purchase_orders, invoices</span>
+<span class="sc">-- inherit tenant scope through requirements → projects → organisations</span></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 5: OPEN SOURCE TOOLS            -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-oss" class="pane">
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Frontend — React ecosystem</div>
+      <div class="oss-grid">
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">shadcn/ui</span><span class="oss-repo" onclick="open('https://github.com/shadcn-ui/ui')">shadcn-ui/ui</span></div><div class="oss-desc">Copy-paste component library built on Radix UI + Tailwind. No npm install — you own the code. Buttons, modals, tables, dropdowns, date pickers, all production-ready.</div><div class="oss-use">→ All shared UI components across all portals</div><div class="oss-stars">⭐ 72k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">TanStack Table v8</span><span class="oss-repo" onclick="open('https://github.com/TanStack/table')">TanStack/table</span></div><div class="oss-desc">Headless table library — sorting, filtering, pagination, row selection, column pinning. Works with any UI layer. Zero opinion on styling.</div><div class="oss-use">→ Requirements list, quote comparison, RFQ tracker, invoice table</div><div class="oss-stars">⭐ 25k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">React Hook Form</span><span class="oss-repo" onclick="open('https://github.com/react-hook-form/react-hook-form')">react-hook-form</span></div><div class="oss-desc">Performant form library — minimal re-renders, built-in validation, Zod integration. Works seamlessly with shadcn/ui inputs.</div><div class="oss-use">→ All forms: submit requirement, vendor profile, invite user, login</div><div class="oss-stars">⭐ 40k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Zod</span><span class="oss-repo" onclick="open('https://github.com/colinhacks/zod')">colinhacks/zod</span></div><div class="oss-desc">TypeScript-first schema validation. Define once, use for frontend form validation AND generate TypeScript types. Pair with React Hook Form zodResolver.</div><div class="oss-use">→ Frontend form validation + type generation from schemas</div><div class="oss-stars">⭐ 33k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Recharts</span><span class="oss-repo" onclick="open('https://github.com/recharts/recharts')">recharts/recharts</span></div><div class="oss-desc">Composable chart library built on D3. BarChart, LineChart, PieChart, AreaChart. Responsive, animated, accessible.</div><div class="oss-use">→ Analytics dashboard: spend by project, vendor performance, cycle time</div><div class="oss-stars">⭐ 24k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">date-fns</span><span class="oss-repo" onclick="open('https://github.com/date-fns/date-fns')">date-fns/date-fns</span></div><div class="oss-desc">Modular date utility library. 200+ functions, fully typed, tree-shakeable. Format, parse, compare, add/subtract dates.</div><div class="oss-use">→ All date display, RFQ deadline calculations, invoice due dates</div><div class="oss-stars">⭐ 34k+ stars · MIT</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Backend — Python ecosystem</div>
+      <div class="oss-grid">
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">FastAPI</span><span class="oss-repo" onclick="open('https://github.com/tiangolo/fastapi')">tiangolo/fastapi</span></div><div class="oss-desc">Modern async Python API framework. Auto OpenAPI docs, dependency injection, native Pydantic v2 integration. The fastest Python framework.</div><div class="oss-use">→ All API endpoints, dependency injection for auth + DB</div><div class="oss-stars">⭐ 78k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">SQLAlchemy 2</span><span class="oss-repo" onclick="open('https://github.com/sqlalchemy/sqlalchemy')">sqlalchemy/sqlalchemy</span></div><div class="oss-desc">Python SQL toolkit and ORM. SQLAlchemy 2 brings native async support. Relationship loading, query composition, migrations via Alembic.</div><div class="oss-use">→ All DB models, queries, relationship loading</div><div class="oss-stars">⭐ 9k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Celery</span><span class="oss-repo" onclick="open('https://github.com/celery/celery')">celery/celery</span></div><div class="oss-desc">Distributed task queue. Send emails, generate PDFs, check expired RFQs — all in background workers. Celery Beat for scheduled tasks.</div><div class="oss-use">→ Email dispatch, PDF generation, RFQ deadline checks, daily digests</div><div class="oss-stars">⭐ 24k+ stars · BSD</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">ReportLab</span><span class="oss-repo" onclick="open('https://github.com/MrBitBucket/reportlab-mirror')">reportlab open source</span></div><div class="oss-desc">Pure Python PDF generation. Create branded quotations, POs, and invoices with tables, logos, footers. No headless browser needed.</div><div class="oss-use">→ PDF output for quotations, purchase orders, invoices</div><div class="oss-stars">BSD-3 license · production-grade</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">SlowAPI</span><span class="oss-repo" onclick="open('https://github.com/laurents/slowapi')">laurents/slowapi</span></div><div class="oss-desc">Rate limiting for FastAPI/Starlette. Per-IP, per-user, per-route limits. Uses Redis as backend. Simple decorator interface.</div><div class="oss-use">→ Login endpoint, RFQ submit, all public endpoints</div><div class="oss-stars">⭐ 1k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">python-multipart</span><span class="oss-repo" onclick="open('https://github.com/andrew-d/python-multipart')">multipart file upload</span></div><div class="oss-desc">Required by FastAPI for file upload support. Handles multipart form data for UploadFile. Zero configuration needed.</div><div class="oss-use">→ Requirement spec file uploads (PDF, Excel, Word)</div><div class="oss-stars">MIT · FastAPI dependency</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Database & storage</div>
+      <div class="oss-grid">
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">PostgreSQL 16</span><span class="oss-repo" onclick="open('https://github.com/postgres/postgres')">postgres/postgres</span></div><div class="oss-desc">The world's most advanced open-source relational DB. JSONB columns for settings, array columns for categories, row-level security available for extra tenant isolation.</div><div class="oss-use">→ Primary datastore for all 13 tables</div><div class="oss-stars">⭐ PostgreSQL License · production gold standard</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Redis 7</span><span class="oss-repo" onclick="open('https://github.com/redis/redis')">redis/redis</span></div><div class="oss-desc">In-memory data structure store. Used as Celery broker, session cache, notification pub/sub, and rate limiter backend.</div><div class="oss-use">→ Celery broker + result backend, session cache, pub/sub</div><div class="oss-stars">⭐ 66k+ stars · BSD-3</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Alembic</span><span class="oss-repo" onclick="open('https://github.com/sqlalchemy/alembic')">sqlalchemy/alembic</span></div><div class="oss-desc">Database migration tool for SQLAlchemy. Autogenerate migrations from model changes. Version control your schema. Never run raw SQL in production.</div><div class="oss-use">→ All schema migrations, CI/CD pipeline step</div><div class="oss-stars">⭐ MIT · SQLAlchemy official</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">MinIO</span><span class="oss-repo" onclick="open('https://github.com/minio/minio')">minio/minio</span></div><div class="oss-desc">S3-compatible open-source object storage. Self-host in Docker for development, switch to AWS S3 in production with zero code changes (same boto3 client).</div><div class="oss-use">→ File uploads (specs, PDFs) in local dev — S3 in prod</div><div class="oss-stars">⭐ 48k+ stars · AGPL</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Email & notifications</div>
+      <div class="oss-grid">
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Mailhog</span><span class="oss-repo" onclick="open('https://github.com/mailhog/MailHog')">mailhog/MailHog</span></div><div class="oss-desc">Email testing tool for development. Catches all outgoing emails and shows them in a web UI. No real emails sent during dev/test. Run in Docker.</div><div class="oss-use">→ Local email testing (replace with SendGrid in prod)</div><div class="oss-stars">⭐ 13k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Jinja2</span><span class="oss-repo" onclick="open('https://github.com/pallets/jinja')">pallets/jinja</span></div><div class="oss-desc">Python templating engine. Use to build HTML email templates for RFQs, quote notifications, PO confirmations. Keep templates as .html files, render at send time.</div><div class="oss-use">→ All HTML email templates (RFQ, quote ready, PO, invoice)</div><div class="oss-stars">⭐ 10k+ stars · BSD-3</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Testing</div>
+      <div class="oss-grid">
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">pytest</span><span class="oss-repo" onclick="open('https://github.com/pytest-dev/pytest')">pytest-dev/pytest</span></div><div class="oss-desc">Python's de-facto test framework. Fixtures, parametrize, coverage reports. Use with pytest-asyncio for async tests and pytest-cov for coverage.</div><div class="oss-use">→ All backend unit + integration tests</div><div class="oss-stars">⭐ 12k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Playwright</span><span class="oss-repo" onclick="open('https://github.com/microsoft/playwright')">microsoft/playwright</span></div><div class="oss-desc">End-to-end browser testing by Microsoft. Test the full user flow in Chromium/Firefox/WebKit. Auto-waits, network mocking, screenshot on failure.</div><div class="oss-use">→ E2E tests: full submit → approve → PO flow</div><div class="oss-stars">⭐ 66k+ stars · Apache 2.0</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">factory-boy</span><span class="oss-repo" onclick="open('https://github.com/FactoryBoy/factory_boy')">FactoryBoy/factory_boy</span></div><div class="oss-desc">Test fixtures factory for Python. Define factories for all models — generate realistic test data in one line. Integrates with SQLAlchemy.</div><div class="oss-use">→ Test data generation for all model factories</div><div class="oss-stars">⭐ 3.5k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Locust</span><span class="oss-repo" onclick="open('https://github.com/locustio/locust')">locustio/locust</span></div><div class="oss-desc">Open-source load testing in Python. Write test scenarios as Python code. Distributed, real-time web UI. Test how the multi-tenant API holds under load.</div><div class="oss-use">→ Load testing API endpoints with concurrent tenants</div><div class="oss-stars">⭐ 24k+ stars · MIT</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">DevOps & infrastructure</div>
+      <div class="oss-grid">
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Docker + Compose</span><span class="oss-repo" onclick="open('https://github.com/docker/compose')">docker/compose</span></div><div class="oss-desc">One command spins up: FastAPI, PostgreSQL, Redis, Celery worker, Celery beat, MailHog, MinIO. docker-compose.yml is the local dev bible.</div><div class="oss-use">→ Full local dev environment — no manual setup</div><div class="oss-stars">⭐ 33k+ stars · Apache 2.0</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Flower</span><span class="oss-repo" onclick="open('https://github.com/mher/flower')">mher/flower</span></div><div class="oss-desc">Real-time Celery task monitoring web UI. See pending/running/failed tasks, retry failed tasks, monitor worker health. Runs as a separate Docker service.</div><div class="oss-use">→ Monitor email dispatch + PDF generation tasks</div><div class="oss-stars">⭐ 6k+ stars · BSD</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Ruff</span><span class="oss-repo" onclick="open('https://github.com/astral-sh/ruff')">astral-sh/ruff</span></div><div class="oss-desc">Extremely fast Python linter (replaces flake8 + isort + pyflakes). 100x faster than flake8. Run in CI to enforce code style on every PR.</div><div class="oss-use">→ CI lint step — catches issues before merge</div><div class="oss-stars">⭐ 32k+ stars · MIT</div></div>
+        <div class="oss-card"><div class="oss-header"><span class="oss-name">Prometheus + Grafana</span><span class="oss-repo" onclick="open('https://github.com/prometheus/prometheus')">prometheus/prometheus</span></div><div class="oss-desc">Open-source metrics + dashboards. Add prometheus-fastapi-instrumentator to expose /metrics. Build Grafana dashboards for API latency, queue depth, DB connections — all free.</div><div class="oss-use">→ Production observability — no Datadog cost</div><div class="oss-stars">⭐ 55k+ stars · Apache 2.0</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 6: SPRINT PLAN                  -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-sprints" class="pane">
+    <div class="card">
+      <div class="card-title">Sprint 1–2 · Foundation + Multi-tenancy core (Weeks 1–4)</div>
+      <div class="sprint-item"><div class="s-num">Sprint 1</div><div class="s-info"><div class="s-title">DB + Auth + Org registration</div><div class="s-chips"><span class="chip new">NEW organisations table</span><span class="chip new">NEW projects table</span><span class="chip new">NEW project_members table</span><span class="chip">users + org_role</span><span class="chip">JWT auth</span><span class="chip">Alembic migrations</span><span class="chip">Docker compose (all services)</span></div></div><div class="s-pts">42 pts</div></div>
+      <div class="sprint-item"><div class="s-num">Sprint 2</div><div class="s-info"><div class="s-title">Invite system + RBAC + React scaffold</div><div class="s-chips"><span class="chip new">NEW invitations table</span><span class="chip new">Invite by email flow</span><span class="chip new">project_members RBAC</span><span class="chip">React + Vite + TS + Tailwind</span><span class="chip">shadcn/ui setup</span><span class="chip">Login / Register / Accept invite pages</span><span class="chip">PrivateRoute + RoleGuard</span></div></div><div class="s-pts">44 pts</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sprint 3–4 · Org dashboard + Projects (Weeks 5–8)</div>
+      <div class="sprint-item"><div class="s-num">Sprint 3</div><div class="s-info"><div class="s-title">Org management + project CRUD backend</div><div class="s-chips"><span class="chip new">Org settings endpoint</span><span class="chip new">Project CRUD endpoints</span><span class="chip new">Project member add/remove</span><span class="chip new">Org-scoped vendor catalog</span><span class="chip">User management endpoints</span><span class="chip">Row-level tenant enforcement in all repos</span></div></div><div class="s-pts">46 pts</div></div>
+      <div class="sprint-item"><div class="s-num">Sprint 4</div><div class="s-info"><div class="s-title">Org dashboard + project switcher UI</div><div class="s-chips"><span class="chip new">Org dashboard page</span><span class="chip new">Project list + create project</span><span class="chip new">Project switcher (nav dropdown)</span><span class="chip new">Member management page</span><span class="chip">User profile page</span><span class="chip">Org settings page</span></div></div><div class="s-pts">44 pts</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sprint 5–6 · Requirements module (Weeks 9–12)</div>
+      <div class="sprint-item"><div class="s-num">Sprint 5</div><div class="s-info"><div class="s-title">Requirements + line items (project-scoped)</div><div class="s-chips"><span class="chip new">project_id on requirements</span><span class="chip new">created_by on requirements</span><span class="chip">Requirement CRUD</span><span class="chip">File upload (MinIO local / S3 prod)</span><span class="chip">Text → line item parser (regex)</span><span class="chip">Status state machine</span></div></div><div class="s-pts">48 pts</div></div>
+      <div class="sprint-item"><div class="s-num">Sprint 6</div><div class="s-info"><div class="s-title">Requirements UI (multi-project)</div><div class="s-chips"><span class="chip">Dashboard — filter by project</span><span class="chip">Submit page (project selector)</span><span class="chip">Editable line items table (TanStack Table)</span><span class="chip">Requirement detail page</span><span class="chip new">Notifications — requirement submitted event</span></div></div><div class="s-pts">46 pts</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sprint 7–8 · Vendor + RFQ module (Weeks 13–16)</div>
+      <div class="sprint-item"><div class="s-num">Sprint 7</div><div class="s-info"><div class="s-title">Per-org vendor catalog + RFQ backend</div><div class="s-chips"><span class="chip new">org_id on vendors</span><span class="chip">Vendor CRUD per org</span><span class="chip">Category-based matching</span><span class="chip">RFQ model + dispatch</span><span class="chip">SendGrid + Jinja2 email templates</span><span class="chip">Vendor portal (public link)</span><span class="chip">Celery: send_rfq_email_task</span></div></div><div class="s-pts">52 pts</div></div>
+      <div class="sprint-item"><div class="s-num">Sprint 8</div><div class="s-info"><div class="s-title">RFQ tracker UI + vendor portal UI</div><div class="s-chips"><span class="chip">RFQ tracker page</span><span class="chip">Vendor portal (submit quote)</span><span class="chip">Vendor catalog management page</span><span class="chip new">Notifications — quote received event</span><span class="chip">MailHog local testing</span></div></div><div class="s-pts">48 pts</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sprint 9–10 · Quote + PO + Invoice (Weeks 17–20)</div>
+      <div class="sprint-item"><div class="s-num">Sprint 9</div><div class="s-info"><div class="s-title">Quote comparison + quotation + PDF</div><div class="s-chips"><span class="chip">Quote comparison (TanStack Table)</span><span class="chip">Best-mix selection logic</span><span class="chip">Margin rules per org</span><span class="chip">ReportLab PDF — quote, PO, invoice</span><span class="chip">Celery: generate_pdf_task</span><span class="chip">Quote approval flow</span></div></div><div class="s-pts">52 pts</div></div>
+      <div class="sprint-item"><div class="s-num">Sprint 10</div><div class="s-info"><div class="s-title">PO + invoice + export + notifications</div><div class="s-chips"><span class="chip">PO generation + page</span><span class="chip">Invoice generation + page</span><span class="chip">JSON/CSV/XML export</span><span class="chip">Mark paid flow</span><span class="chip new">Notifications module — in-app bell</span><span class="chip new">Notifications table + read/unread</span></div></div><div class="s-pts">50 pts</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sprint 11 · Analytics + hardening + launch (Weeks 21–22)</div>
+      <div class="sprint-item"><div class="s-num">Sprint 11</div><div class="s-info"><div class="s-title">Analytics + observability + deploy</div><div class="s-chips"><span class="chip new">Analytics dashboard (Recharts)</span><span class="chip new">Spend by project chart</span><span class="chip new">Vendor performance chart</span><span class="chip new">Prometheus + Grafana setup</span><span class="chip">pytest full suite</span><span class="chip">Playwright E2E</span><span class="chip">Locust load test</span><span class="chip">Ruff CI lint</span><span class="chip">GitHub Actions deploy</span></div></div><div class="s-pts">46 pts</div></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- TAB 7: COPILOT PROMPTS              -->
+  <!-- ════════════════════════════════════ -->
+  <div id="tab-copilot" class="pane">
+
+    <div class="card2" style="margin-bottom:16px;font-size:12px;color:var(--ink2);line-height:1.8">
+      Paste the <b style="color:var(--ink)">master context</b> first, then one step at a time. Each prompt is self-contained and production-ready.
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">MASTER</span><span class="p-title">Project context</span><button class="copy-btn" onclick="cp('pm')">Copy</button></div>
+      <pre class="pblock" id="pm">You are building ProcureLink v2 — a multi-tenant, multi-project, multi-user
+B2B procurement platform. No AI/LLM. Pure business logic.
+
+CORE CONCEPT:
+  Organisation (tenant) → Projects → Requirements → RFQs → Quotes → PO → Invoice
+  Each org has its own: users, projects, vendor catalog, settings
+  Each project has: requirements, rfqs, quotations, pos, invoices, members
+
+ROLES:
+  super-admin : system-wide, all orgs
+  org-admin   : manage own org, all projects in org
+  buyer       : create/manage requirements in assigned projects
+  vendor-user : receive RFQs, submit quotes (vendor orgs only)
+  viewer      : read-only in assigned projects
+
+TENANT ISOLATION RULE:
+  Every DB query must include org_id filter.
+  org_id always comes from current_user.org_id (never from request body).
+  Return 404 (not 403) for resources in other orgs.
+
+OPEN SOURCE STACK:
+  Frontend : React 18 + Vite + TypeScript + Tailwind CSS
+             shadcn/ui · TanStack Table · React Hook Form · Zod · Recharts
+  Backend  : Python 3.11 + FastAPI + SQLAlchemy 2 + Alembic + Pydantic v2
+             Celery + Redis · ReportLab · SlowAPI · Jinja2
+  DB       : PostgreSQL 16
+  Dev      : Docker Compose + MinIO (S3) + MailHog + Flower
+  Test     : pytest + Playwright + factory-boy + Locust
+  Obs      : Prometheus + Grafana
+
+ARCHITECTURE PATTERN:
+  Router → Service → Repository → DB
+  All repos filter by org_id from current_user
+  Services contain all business logic
+  Routers only handle HTTP concerns</pre>
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">Step 1</span><span class="p-title">Multi-tenant schema + auth</span><button class="copy-btn" onclick="cp('p1')">Copy</button></div>
+      <div class="p-desc">New tables: organisations, projects, project_members, invitations + auth endpoints.</div>
+      <pre class="pblock" id="p1">Build the multi-tenant foundation for ProcureLink (Sprint 1-2).
+
+1. backend/app/models/tenant.py
+   Organisation(id UUID, name, slug UNIQUE, type ENUM(customer,vendor,internal),
+                plan ENUM(free,pro,enterprise) DEFAULT free, settings JSONB,
+                created_at TIMESTAMPTZ)
+
+   Project(id UUID, org_id FK, name, description TEXT, status ENUM(active,archived),
+           settings JSONB, created_by FK→users, created_at)
+
+   ProjectMember(id UUID, project_id FK, user_id FK, project_role ENUM(buyer,viewer),
+                 added_at TIMESTAMPTZ)
+   UNIQUE constraint on (project_id, user_id)
+
+   Invitation(id UUID, org_id FK, email, org_role ENUM, token VARCHAR UNIQUE,
+              expires_at TIMESTAMPTZ, accepted_at TIMESTAMPTZ)
+
+2. backend/app/models/user.py
+   User(id UUID, org_id FK, email UNIQUE, hashed_password, is_active BOOL,
+        org_role ENUM(super-admin,org-admin,member), invited_by FK→users,
+        last_login, created_at)
+
+3. backend/app/repositories/org_repo.py
+   create_org(name, type) -> Organisation
+   get_by_id(org_id) -> Organisation
+   update_settings(org_id, settings) -> Organisation
+
+4. backend/app/repositories/project_repo.py
+   create(org_id, name, created_by) -> Project
+   list_by_org(org_id) -> list[Project]
+   get_by_id(project_id, org_id) -> Project | 404
+   add_member(project_id, user_id, role) -> ProjectMember
+   remove_member(project_id, user_id) -> None
+   get_user_projects(user_id, org_id) -> list[Project]  (via project_members join)
+
+5. backend/app/services/auth_service.py
+   register(org_name, email, password) -> {org, user, token}
+     Creates org + first user with org-admin role in one transaction
+   login(email, password) -> {access_token}
+   invite_user(email, org_role, invited_by, db) -> Invitation
+     Creates invitation record, sends email via email_service
+   accept_invitation(token, password, db) -> {access_token}
+     Validates token not expired, creates user, marks invitation accepted
+   get_current_user(token) -> User  (FastAPI dependency)
+   require_role(*roles) -> FastAPI dependency factory
+
+6. backend/app/routers/auth.py
+   POST /auth/register        {org_name, email, password}
+   POST /auth/login           {email, password}
+   GET  /auth/me              → UserOut
+   POST /auth/invite          {email, org_role}  (org-admin only)
+   POST /auth/accept-invite   {token, password}
+
+7. backend/app/routers/projects.py
+   POST   /projects/              {name, description}  (org-admin)
+   GET    /projects/              → list (user's projects only)
+   GET    /projects/{id}          → project detail
+   PUT    /projects/{id}          (org-admin)
+   POST   /projects/{id}/members  {user_id, project_role}
+   DELETE /projects/{id}/members/{user_id}
+
+8. frontend/src/pages/auth/ — LoginPage, RegisterPage, AcceptInvitePage
+9. frontend/src/pages/projects/ — ProjectListPage, ProjectSettingsPage
+10. frontend/src/components/ProjectSwitcher.tsx
+    Dropdown in nav showing user's projects, click to switch active project
+    Store active project_id in context + localStorage
+
+Show all files. Include Alembic migration for all new tables.</pre>
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">Step 2</span><span class="p-title">Tenant-scoped requirements module</span><button class="copy-btn" onclick="cp('p2')">Copy</button></div>
+      <div class="p-desc">Requirements and line items scoped to org + project.</div>
+      <pre class="pblock" id="p2">Build the Requirements module for ProcureLink with full tenant isolation (Sprint 5-6).
+
+IMPORTANT: Every query must include org_id. project_id is also required.
+
+1. backend/app/models/requirement.py
+   Requirement(id, org_id FK, project_id FK→projects, created_by FK→users,
+               project_name VARCHAR, raw_text TEXT, file_path VARCHAR,
+               status ENUM(draft,submitted,rfq_sent,quotes_received,quote_ready,
+                           approved,po_raised,invoiced,completed),
+               delivery_date DATE, created_at, updated_at)
+
+   LineItem(id, requirement_id FK, description, part_number, quantity FLOAT,
+            unit, specs, category, sort_order INT)
+
+2. backend/app/repositories/requirement_repo.py
+   ALL methods take org_id as parameter:
+   create(org_id, project_id, created_by, data) -> Requirement
+   list_by_project(project_id, org_id, page, limit) -> list[Requirement]
+   get_by_id(req_id, org_id) -> Requirement  (404 if org_id mismatch)
+   update_status(req_id, status, org_id) -> Requirement
+   add_line_items(req_id, items, org_id) -> list[LineItem]
+   update_line_items(req_id, items, org_id) -> list[LineItem]
+
+3. backend/app/services/requirement_service.py
+   create(data, project_id, current_user, db) -> Requirement
+     Validates user is member of project with buyer role
+   parse_text_to_items(text: str) -> list[LineItemCreate]
+     REGEX parser only — NO AI:
+     - Split by newlines and numbered list patterns
+     - Extract quantity: patterns like "50x", "50 ea", "50 units", "qty: 50"
+     - Extract unit: ea/each/pcs/m/metres/kg/l/litre/set
+     - Remaining text = description
+   upload_file(file, req_id, current_user, db) -> str
+     Upload to S3 via storage_service, update requirement.file_path
+   submit(req_id, current_user, db) -> Requirement
+     Validates all line items have description + qty, sets status=submitted
+   edit_line_items(req_id, items, current_user, db) -> list[LineItem]
+
+4. backend/app/routers/requirements.py
+   All routes require auth. org_id always from current_user.
+   GET    /projects/{project_id}/requirements/
+   POST   /projects/{project_id}/requirements/
+   GET    /projects/{project_id}/requirements/{id}
+   PUT    /projects/{project_id}/requirements/{id}/items
+   POST   /projects/{project_id}/requirements/{id}/submit
+   POST   /projects/{project_id}/requirements/{id}/upload
+
+5. frontend/src/hooks/useRequirements.ts
+   All hooks accept projectId parameter
+   useRequirements(projectId) — filtered list
+   useRequirement(id, projectId)
+   useCreateRequirement(projectId) mutation
+   useSubmitRequirement(id, projectId) mutation
+   useEditLineItems(id, projectId) mutation
+
+6. frontend/src/pages/requirements/SubmitPage.tsx
+   Step 1: Project auto-selected from ProjectSwitcher context
+   Text area OR file upload
+   "Parse" button — calls regex service, shows result
+   Step 2: TanStack Table with editable cells — description, part_no, qty, unit
+   Add row button, delete row button
+   Submit button
+
+Show all files in full. Show how org_id enforcement works in repositories.</pre>
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">Step 3</span><span class="p-title">Org-scoped vendor catalog + RFQ</span><button class="copy-btn" onclick="cp('p3')">Copy</button></div>
+      <div class="p-desc">Each org manages its own vendor list. RFQs scoped to org + project.</div>
+      <pre class="pblock" id="p3">Build the Vendor and RFQ modules for ProcureLink with org-scoped isolation (Sprint 7-8).
+
+IMPORTANT: vendors belong to an org. Each org sees only its own vendor catalog.
+
+1. backend/app/models/vendor.py
+   Vendor(id, org_id FK→organisations,  ← tenant scope
+          name, email, categories TEXT[], rating FLOAT, is_active BOOL, created_at)
+
+   RFQ(id, org_id FK, project_id FK, requirement_id FK, vendor_id FK,
+       status ENUM(pending,sent,responded,expired),
+       deadline TIMESTAMPTZ, sent_at, responded_at, reminder_count INT DEFAULT 0)
+
+   QuoteLine(id, rfq_id FK, line_item_id FK, unit_price FLOAT, lead_days INT, notes TEXT)
+
+2. backend/app/repositories/vendor_repo.py
+   EVERY method filters by org_id:
+   list_active(org_id) -> list[Vendor]
+   get_by_id(vendor_id, org_id) -> Vendor | 404
+   create(org_id, data) -> Vendor
+   update(vendor_id, org_id, data) -> Vendor
+   match_by_categories(org_id, categories: list[str]) -> list[Vendor]
+     SQL: WHERE org_id=:org_id AND categories && :categories
+
+3. backend/app/services/rfq_service.py
+   All methods take current_user for org_id:
+
+   match_vendors(req_id, current_user, db) -> list[Vendor]
+     Gets line item categories, queries vendor_repo.match_by_categories(org_id, cats)
+
+   send_rfqs(req_id, vendor_ids, current_user, db) -> list[RFQ]
+     Validates all vendor_ids belong to org
+     Creates RFQ records, fires send_rfq_email_task via Celery per vendor
+
+   send_reminder(rfq_id, current_user, db) -> RFQ
+     Validates rfq.org_id == current_user.org_id
+     Increments reminder_count, fires email task
+
+   submit_quote(rfq_id, lines, db) -> RFQ
+     PUBLIC endpoint — validates rfq exists (no auth required)
+     Creates QuoteLine records, sets status=responded
+     Fires internal notification: quote received
+
+   check_expired(db) -> int
+     Celery Beat task: UPDATE rfqs SET status=expired
+     WHERE deadline < NOW() AND status=sent
+
+4. backend/app/services/email_service.py using Jinja2 templates
+   Templates in backend/app/templates/:
+   - rfq_email.html    (vendor RFQ with line items table)
+   - quote_ready.html  (customer — quote ready to review)
+   - po_confirm.html   (vendor — PO raised)
+   - invoice.html      (customer — invoice with amount due)
+   Falls back to console print if SENDGRID_API_KEY not set (dev mode)
+   In dev: sends to MailHog SMTP on localhost:1025
+
+5. backend/app/routers/vendors.py + rfqs.py
+   All vendor endpoints require org-admin role.
+   GET  /vendors/                       (org_id from current_user)
+   POST /vendors/
+   PUT  /vendors/{id}
+   GET  /vendors/match/{req_id}
+
+   POST /rfqs/send/{req_id}             (buyer+ role)
+   GET  /rfqs/requirement/{req_id}      (buyer+ role)
+   POST /rfqs/{id}/respond              (PUBLIC — no auth)
+   POST /rfqs/{id}/remind               (buyer+ role)
+
+6. frontend/src/pages/vendor/VendorPortalPage.tsx
+   PUBLIC route: /vendor-portal/:rfqId
+   No auth required. Shows RFQ + line items.
+   Input: unit_price and lead_days per line.
+   Submit → POST /rfqs/:id/respond. Success message.
+
+7. frontend/src/pages/internal/VendorCatalogPage.tsx
+   Only visible to org-admin role.
+   TanStack Table: vendors, categories (tag chips), rating, active toggle.
+   Add vendor modal (React Hook Form + Zod).
+
+Show all files in full.</pre>
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">Step 4</span><span class="p-title">Notifications module</span><button class="copy-btn" onclick="cp('p4')">Copy</button></div>
+      <div class="p-desc">In-app notifications per user, per project, with read/unread state.</div>
+      <pre class="pblock" id="p4">Build the Notifications module for ProcureLink (Sprint 10).
+
+1. backend/app/models/notification.py
+   Notification(id UUID, org_id FK, user_id FK, project_id FK,
+                type VARCHAR,  -- rfq_responded, quote_ready, po_raised, invoice_issued, reminder
+                title VARCHAR, body TEXT,
+                entity_type VARCHAR, entity_id UUID,  -- for deep linking
+                is_read BOOL DEFAULT false,
+                created_at TIMESTAMPTZ)
+   Index: (user_id, is_read, created_at DESC)
+
+2. backend/app/services/notification_service.py
+   create(user_id, org_id, project_id, type, title, body, entity_type, entity_id, db)
+   mark_read(notification_id, user_id, db) -> Notification
+   mark_all_read(user_id, org_id, db) -> int (count updated)
+   list_for_user(user_id, org_id, page, limit, unread_only) -> list[Notification]
+   get_unread_count(user_id, org_id) -> int
+
+   notify_quote_received(rfq, db):
+     Finds all project members with buyer+ role
+     Creates notification for each: type=rfq_responded
+     title: f"{rfq.vendor.name} submitted a quote"
+
+   notify_quote_ready(quotation, db):
+     title: f"Quotation {quotation.reference} is ready to review"
+
+   notify_po_raised(po, db):
+     Notifies vendor users in the vendor org
+
+3. backend/app/routers/notifications.py
+   GET  /notifications/              ?unread_only=true&page=1&limit=20
+   GET  /notifications/count         → {unread: int}
+   PUT  /notifications/{id}/read
+   PUT  /notifications/read-all
+
+4. Wire into existing services:
+   rfq_service.submit_quote → call notify_quote_received
+   quote_service.build_quotation → call notify_quote_ready
+   po_service.raise_po → call notify_po_raised
+
+5. frontend/src/components/NotificationBell.tsx
+   Bell icon in top nav with red badge showing unread count.
+   useQuery polling /notifications/count every 30 seconds.
+   Click opens dropdown drawer: list of notifications (shadcn Popover).
+   Each notification: icon, title, body, time ago (date-fns formatDistanceToNow).
+   Click notification: marks read + navigates to entity (deep link).
+   "Mark all read" button at top.
+
+6. frontend/src/hooks/useNotifications.ts
+   useNotificationCount() — polls every 30s
+   useNotifications(unreadOnly) — paginated list
+   useMarkRead(id) — mutation
+   useMarkAllRead() — mutation
+
+Show all files in full.</pre>
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">Step 5</span><span class="p-title">Analytics dashboard</span><button class="copy-btn" onclick="cp('p5')">Copy</button></div>
+      <div class="p-desc">Per-org analytics using Recharts — spend, vendor performance, cycle time.</div>
+      <pre class="pblock" id="p5">Build the Analytics module for ProcureLink (Sprint 11).
+All data scoped to current_user.org_id. No external analytics service — pure SQL aggregations.
+
+1. backend/app/routers/analytics.py
+   All endpoints require auth + filter by org_id from current_user.
+
+   GET /analytics/overview
+   Returns:
+   {
+     total_requirements: int,     -- all time
+     active_projects: int,        -- status=active
+     total_po_value: float,       -- sum of all po amounts in org
+     open_rfqs: int,              -- status=sent
+     overdue_invoices: int,       -- status=issued AND due_at < NOW()
+     avg_cycle_days: float        -- avg days from req created to po raised
+   }
+
+   GET /analytics/spend-by-project?months=6
+   Returns list: [{project_name, month: "2026-03", total_spend: float}]
+   SQL: GROUP BY project_id, DATE_TRUNC('month', po.raised_at)
+
+   GET /analytics/vendor-performance
+   Returns list: [{vendor_name, rfqs_sent, rfqs_responded, avg_response_days,
+                   avg_unit_price_index, win_rate_pct}]
+
+   GET /analytics/cycle-time?months=6
+   Returns list: [{month, avg_days_to_quote, avg_days_to_po, avg_days_to_payment}]
+
+   GET /analytics/requirements-by-status
+   Returns: [{status, count}] — for pie chart
+
+2. frontend/src/pages/analytics/AnalyticsDashboard.tsx
+   Uses Recharts. Role: org-admin.
+
+   Overview stat tiles (top row):
+   Total spend | Active projects | Open RFQs | Overdue invoices | Avg cycle days
+
+   Row 1 charts:
+   - BarChart: Monthly spend by project (stacked bars, one series per project)
+     useSpendByProject() hook
+   - LineChart: Cycle time trend (days to quote, days to PO, days to payment)
+     useAnalyticsCycleTime() hook
+
+   Row 2 charts:
+   - BarChart: Vendor performance (win rate, avg response time)
+     useVendorPerformance() hook
+   - PieChart: Requirements by status distribution
+     useRequirementsByStatus() hook
+
+3. frontend/src/hooks/useAnalytics.ts
+   useAnalyticsOverview()
+   useSpendByProject(months?: number)
+   useVendorPerformance()
+   useAnalyticsCycleTime(months?: number)
+   useRequirementsByStatus()
+
+   All hooks use React Query with staleTime: 5 * 60 * 1000 (5min cache)
+
+Use Recharts ResponsiveContainer for all charts.
+Use shadcn Card components to wrap each chart.
+Include loading skeletons while data fetches.
+
+Show all files in full.</pre>
+    </div>
+
+    <div class="prompt-wrap">
+      <div class="p-head"><span class="p-step">Step 6</span><span class="p-title">Docker Compose — full local stack</span><button class="copy-btn" onclick="cp('p6')">Copy</button></div>
+      <div class="p-desc">Complete docker-compose.yml with all open-source services for local dev.</div>
+      <pre class="pblock" id="p6">Create the complete docker-compose.yml for ProcureLink local development.
+
+Services to include:
+1. api — FastAPI backend
+   build: ./backend
+   ports: 8000:8000
+   env: DATABASE_URL, REDIS_URL, MINIO_ENDPOINT, SMTP_HOST=mailhog, SMTP_PORT=1025
+   depends_on: db, redis, minio, mailhog
+   volumes: ./backend:/app (hot reload)
+   command: uvicorn app.main:app --reload --host 0.0.0.0
+
+2. worker — Celery worker
+   build: ./backend (same image)
+   command: celery -A app.worker worker --loglevel=info -Q default,emails,pdfs
+   depends_on: db, redis
+
+3. beat — Celery Beat scheduler
+   command: celery -A app.worker beat --loglevel=info
+   depends_on: redis
+
+4. flower — Celery monitoring UI
+   command: celery -A app.worker flower --port=5555
+   ports: 5555:5555
+
+5. db — PostgreSQL 16
+   image: postgres:16-alpine
+   ports: 5432:5432
+   volumes: postgres_data:/var/lib/postgresql/data
+   env: POSTGRES_DB=procurelink, POSTGRES_USER=proc, POSTGRES_PASSWORD=proc
+
+6. redis — Redis 7
+   image: redis:7-alpine
+   ports: 6379:6379
+
+7. minio — S3-compatible storage
+   image: minio/minio
+   ports: 9000:9000, 9001:9001 (console)
+   command: server /data --console-address ":9001"
+   env: MINIO_ROOT_USER=minioadmin, MINIO_ROOT_PASSWORD=minioadmin
+   volumes: minio_data:/data
+
+8. mailhog — Email testing
+   image: mailhog/mailhog
+   ports: 1025:1025 (SMTP), 8025:8025 (Web UI)
+
+9. prometheus — Metrics collection
+   image: prom/prometheus
+   ports: 9090:9090
+   volumes: ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+10. grafana — Metrics dashboards
+    image: grafana/grafana
+    ports: 3001:3000
+    depends_on: prometheus
+
+Also create:
+- frontend/vite.config.ts: proxy /api → http://localhost:8000
+- backend/.env.example with all service URLs
+- monitoring/prometheus.yml scraping FastAPI /metrics
+- Makefile with commands:
+  make up     → docker-compose up -d
+  make down   → docker-compose down
+  make logs   → docker-compose logs -f api worker
+  make migrate → docker-compose exec api alembic upgrade head
+  make test    → docker-compose exec api pytest
+  make shell   → docker-compose exec api python
+
+Show all files in full including Makefile.</pre>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+var modData = {
+  m1:{title:"🏢 Org & Project module",color:"var(--blue)",
+    desc:"NEW in v2. Manages organisations (tenants), projects within orgs, and project membership. This is the foundation of the multi-tenant architecture — everything else belongs to an org or a project.",
+    pages:["OrgDashboard","ProjectListPage","ProjectDetailPage","ProjectSettingsPage","MemberManagementPage","OrgSettingsPage"],
+    endpoints:["POST /orgs/","GET /orgs/me","PUT /orgs/me","POST /projects/","GET /projects/","GET /projects/{id}","PUT /projects/{id}","POST /projects/{id}/members","DELETE /projects/{id}/members/{uid}"],
+    tables:["organisations","projects","project_members","invitations"]},
+  m2:{title:"🔐 Auth & RBAC module",color:"var(--blue)",
+    desc:"JWT authentication with two-level roles: org role (org-admin, member) and project role (buyer, viewer). Vendor-user is a special org role for vendor organisations. Invite system via tokenised email links.",
+    pages:["LoginPage","RegisterPage","AcceptInvitePage","ProfilePage"],
+    endpoints:["POST /auth/register","POST /auth/login","GET /auth/me","POST /auth/invite","POST /auth/accept-invite","PUT /auth/me"],
+    tables:["users","invitations"]},
+  m3:{title:"📋 Requirements module",color:"var(--purple)",
+    desc:"Requirements are always scoped to org + project. Multiple users in a project can submit requirements. Regex-based text parser extracts line items. File upload (PDF/Excel) supported via MinIO/S3.",
+    pages:["DashboardPage (multi-project)","SubmitPage","RequirementDetailPage","LineItemsEditor"],
+    endpoints:["POST /projects/{id}/requirements/","GET /projects/{id}/requirements/","GET /projects/{id}/requirements/{rid}","PUT /projects/{id}/requirements/{rid}/items","POST /projects/{id}/requirements/{rid}/submit","POST /projects/{id}/requirements/{rid}/upload"],
+    tables:["requirements","line_items"]},
+  m4:{title:"🏭 Vendor module",color:"var(--amber)",
+    desc:"Each organisation maintains its own vendor catalog. A vendor in Org A is invisible to Org B. Matching is category-based SQL intersection. Org-admin manages the catalog.",
+    pages:["VendorCatalogPage","VendorAddEditModal","VendorMatchPage"],
+    endpoints:["GET /vendors/","POST /vendors/","PUT /vendors/{id}","DELETE /vendors/{id}","GET /vendors/match/{req_id}","POST /vendors/match/{req_id}"],
+    tables:["vendors"]},
+  m5:{title:"📨 RFQ module",color:"var(--teal)",
+    desc:"RFQs are dispatched per-vendor via SendGrid (Jinja2 HTML templates). Each vendor gets a unique public link to submit quotes — no login required. Status tracked per vendor. Celery handles async email dispatch and deadline reminders.",
+    pages:["RFQTrackerPage","VendorPortalPage (public)","VendorCatalogOpsPage"],
+    endpoints:["POST /rfqs/send/{req_id}","GET /rfqs/requirement/{req_id}","GET /rfqs/{id}","POST /rfqs/{id}/respond (public)","POST /rfqs/{id}/remind","PUT /rfqs/{id}/status"],
+    tables:["rfqs","quote_lines"]},
+  m6:{title:"📊 Quote module",color:"var(--teal)",
+    desc:"Collects all vendor quote lines and builds a comparison table using TanStack Table. Best-mix selection is pure Python logic (lowest per line). Org-admin can override margin rules per org or per project.",
+    pages:["QuoteComparisonPage","QuoteReviewPage (customer)","MarginSettingsPage"],
+    endpoints:["GET /quotes/comparison/{req_id}","POST /quotes/build/{req_id}","GET /quotes/{id}","PUT /quotes/{id}/margin","POST /quotes/{id}/approve","GET /quotes/{id}/pdf"],
+    tables:["quotations"]},
+  m7:{title:"🛒 PO & Invoice module",color:"var(--amber)",
+    desc:"Purchase orders auto-generated from approved quotations. Invoices raised from POs. ReportLab generates branded PDFs for all three documents. Export in JSON/CSV/XML for ERP integration. Payment status tracked.",
+    pages:["POPage","InvoicePage","ExportPanel","PaymentHistoryPage"],
+    endpoints:["POST /po/{quote_id}","GET /po/{id}","GET /po/{id}/pdf","PUT /po/{id}/status","POST /invoices/{po_id}","GET /invoices/{id}","GET /invoices/{id}/pdf","POST /invoices/{id}/pay","GET /invoices/{id}/export"],
+    tables:["purchase_orders","invoices"]},
+  m8:{title:"🔔 Notifications module",color:"var(--green)",
+    desc:"NEW in v2. In-app notification bell with unread count badge. Notifications are scoped to user + org + project. Events: quote received, quote ready, PO raised, invoice issued, deadline reminder. Polling every 30s via React Query.",
+    pages:["NotificationBell (component)","NotificationsDrawer","NotificationSettingsPage"],
+    endpoints:["GET /notifications/","GET /notifications/count","PUT /notifications/{id}/read","PUT /notifications/read-all"],
+    tables:["notifications"]},
+  m9:{title:"📈 Analytics module",color:"var(--purple)",
+    desc:"NEW in v2. Per-org dashboards using pure SQL aggregations and Recharts. Charts: monthly spend by project (stacked bar), cycle time trend (line), vendor performance (bar), requirements by status (pie). All data scoped to org_id.",
+    pages:["AnalyticsDashboard","SpendByProjectChart","VendorPerformanceChart","CycleTimeChart"],
+    endpoints:["GET /analytics/overview","GET /analytics/spend-by-project","GET /analytics/vendor-performance","GET /analytics/cycle-time","GET /analytics/requirements-by-status"],
+    tables:["(SQL aggregations across all tables)"]}
+};
+
+function showMod(id){
+  document.querySelectorAll('.mod-card').forEach(c=>c.classList.remove('on'));
+  document.getElementById('mc-'+id).classList.add('on');
+  var d=modData[id];
+  var html=`<div class="mod-detail" style="display:block">
+    <div style="font-size:14px;font-weight:700;color:${d.color};margin-bottom:10px">${d.title}</div>
+    <p style="font-size:12px;color:var(--ink2);line-height:1.7;margin-bottom:14px">${d.desc}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+      <div><div class="card-title">Pages (${d.pages.length})</div>${d.pages.map(p=>`<div style="font-size:11px;color:var(--ink2);padding:3px 0;border-bottom:1px solid var(--border)">${p}</div>`).join('')}</div>
+      <div><div class="card-title">Endpoints (${d.endpoints.length})</div>${d.endpoints.map(e=>{var m=e.split(' ')[0],p=e.split(' ').slice(1).join(' ');var cls=m==='GET'?'pg':m==='POST'?'pb':m==='PUT'?'pa':'pr';return `<div style="display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px solid var(--border)"><span class="pill ${cls}" style="font-size:9px;padding:1px 5px;min-width:36px;text-align:center">${m}</span><span style="font-family:var(--mono);font-size:10px;color:var(--ink2)">${p}</span></div>`;}).join('')}</div>
+      <div><div class="card-title">Tables (${d.tables.length})</div>${d.tables.map(t=>`<div style="font-size:11px;color:var(--teal);padding:3px 0;border-bottom:1px solid var(--border);font-family:var(--mono)">${t}</div>`).join('')}</div>
+    </div>
+  </div>`;
+  var el=document.getElementById('mod-detail-panel');
+  el.innerHTML=html;
+}
+
+function tab(id,btn){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tab-'+id).classList.add('on');
+  btn.classList.add('on');
+}
+
+function cp(id){
+  navigator.clipboard.writeText(document.getElementById(id).textContent.trim()).then(()=>{
+    document.querySelectorAll('.copy-btn').forEach(b=>{
+      if(b.getAttribute('onclick')===`cp('${id}')`){b.textContent='✓ Copied';setTimeout(()=>b.textContent='Copy',2000);}
+    });
+  });
+}
+</script>
+</body>
+</html>

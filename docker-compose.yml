@@ -1,0 +1,145 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./backend
+    container_name: pl_api
+    ports:
+      - "2000:2000"
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://proc:proc@db:5432/procurelink
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 2000 --reload
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    container_name: pl_worker
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://proc:proc@db:5432/procurelink
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A app.worker worker --loglevel=info -Q default,emails,pdfs
+    restart: unless-stopped
+
+  beat:
+    build: ./backend
+    container_name: pl_beat
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://proc:proc@db:5432/procurelink
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A app.worker beat --loglevel=info
+    restart: unless-stopped
+
+  flower:
+    build: ./backend
+    container_name: pl_flower
+    ports:
+      - "5555:5555"
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A app.worker flower --port=5555
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: pl_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: procurelink
+      POSTGRES_USER: proc
+      POSTGRES_PASSWORD: proc
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proc -d procurelink"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: pl_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: pl_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: pl_mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pl_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pl_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:

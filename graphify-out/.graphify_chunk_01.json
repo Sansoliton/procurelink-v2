@@ -1,0 +1,1669 @@
+{
+  "nodes": [
+    {
+      "id": "readme_procurelink_v2",
+      "label": "ProcureLink v2 Platform",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_frontend_stack",
+      "label": "Frontend Stack (React 18 + Vite + TypeScript + Tailwind CSS + shadcn/ui)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_backend_stack",
+      "label": "Backend Stack (Python 3.11 + FastAPI + SQLAlchemy 2 + Alembic + PostgreSQL)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L4",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_queue_stack",
+      "label": "Queue Stack (Redis + Celery async tasks)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L5",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_storage_stack",
+      "label": "Storage Stack (MinIO local / AWS S3 prod)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_observability_stack",
+      "label": "Observability Stack (Prometheus + Grafana)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L8",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_mailhog",
+      "label": "MailHog (Dev Email Server)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_fastapi",
+      "label": "FastAPI",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_uvicorn",
+      "label": "Uvicorn ASGI Server",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_sqlalchemy",
+      "label": "SQLAlchemy 2 ORM",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_alembic",
+      "label": "Alembic DB Migrations",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L4",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_psycopg2_binary",
+      "label": "psycopg2-binary PostgreSQL Driver",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L5",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_pydantic",
+      "label": "Pydantic v2 Data Validation",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_pydantic_settings",
+      "label": "pydantic-settings Configuration",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_celery",
+      "label": "Celery Task Queue",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_redis_client",
+      "label": "Redis Python Client",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L10",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_python_multipart",
+      "label": "python-multipart (File Uploads)",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L11",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_httpx",
+      "label": "httpx HTTP Client",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L12",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_python_jose",
+      "label": "python-jose JWT Library",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L13",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_passlib",
+      "label": "passlib Password Hashing (bcrypt)",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L14",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_boto3",
+      "label": "boto3 AWS SDK (S3 Storage)",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_jinja2",
+      "label": "Jinja2 Template Engine (Email)",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L17",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_reportlab",
+      "label": "ReportLab PDF Generation",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L18",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_slowapi",
+      "label": "SlowAPI Rate Limiting",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L19",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_prometheus_instrumentator",
+      "label": "prometheus-fastapi-instrumentator",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L20",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_ruff",
+      "label": "Ruff Linter",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L21",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_pytest",
+      "label": "pytest Testing Framework",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L22",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_pytest_asyncio",
+      "label": "pytest-asyncio Async Test Support",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L23",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "requirements_factory_boy",
+      "label": "factory-boy Test Fixtures",
+      "file_type": "code",
+      "source_file": "backend/requirements.txt",
+      "source_location": "L24",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "indexhtml_frontend_entry",
+      "label": "Frontend HTML Entry Point (index.html)",
+      "file_type": "code",
+      "source_file": "frontend/index.html",
+      "source_location": "L1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "indexhtml_main_tsx",
+      "label": "main.tsx React Root Module",
+      "file_type": "code",
+      "source_file": "frontend/index.html",
+      "source_location": "L12",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "indexhtml_google_fonts",
+      "label": "Google Fonts (Plus Jakarta Sans, Fira Code)",
+      "file_type": "code",
+      "source_file": "frontend/index.html",
+      "source_location": "L6-L9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_organisation_model",
+      "label": "Organisation Model (Tenant Root)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L3-L6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_project_model",
+      "label": "Project Model",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L8-L11",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_projectmember_model",
+      "label": "ProjectMember Model (project_role: buyer|viewer)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L13-L16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_invitation_model",
+      "label": "Invitation Model (token-based invite flow)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L18-L21",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_user_model",
+      "label": "User Model (org_role: super-admin|org-admin|member)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L23-L26",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_org_repo",
+      "label": "org_repo (Organisation Repository)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L29-L32",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_project_repo",
+      "label": "project_repo (Project Repository)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L34-L41",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_auth_service",
+      "label": "auth_service (register, login, invite, accept_invitation, get_current_user, require_role)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L43-L57",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_auth_router",
+      "label": "auth Router (POST /auth/register|login|invite|accept-invite, GET /auth/me)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L59-L64",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_projects_router",
+      "label": "projects Router (CRUD /projects/*, members management)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L66-L73",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_login_page",
+      "label": "LoginPage (frontend/src/pages/auth/)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L75",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_register_page",
+      "label": "RegisterPage (frontend/src/pages/auth/)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L75",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_accept_invite_page",
+      "label": "AcceptInvitePage (frontend/src/pages/auth/)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L75",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_project_list_page",
+      "label": "ProjectListPage (frontend/src/pages/projects/)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L76",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_project_settings_page",
+      "label": "ProjectSettingsPage (frontend/src/pages/projects/)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L76",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_project_switcher",
+      "label": "ProjectSwitcher Component (nav dropdown, stores active project_id in context + localStorage)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L77-L80",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multitenant_alembic_migration",
+      "label": "Alembic Migration (multi-tenant tables: org, user, project, member, invitation)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "projectcontext_procurement_workflow",
+      "label": "Procurement Workflow (Org → Project → Requirements → RFQs → Quotes → PO → Invoice)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L4-L7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "projectcontext_tenant_isolation_rule",
+      "label": "Tenant Isolation Rule (org_id on every DB query, from current_user never request body, 404 not 403)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L12-L16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "projectcontext_role_hierarchy",
+      "label": "Role Hierarchy (super-admin, org-admin, buyer, vendor-user, viewer)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L9-L14",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "projectcontext_architecture_pattern",
+      "label": "Architecture Pattern (Router → Service → Repository → DB)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L28-L32",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_requirement_model",
+      "label": "Requirement Model (org_id, project_id, status ENUM, delivery_date)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L3-L10",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_lineitem_model",
+      "label": "LineItem Model (description, part_number, quantity, unit, specs, category)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L12-L14",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_requirement_repo",
+      "label": "requirement_repo (all methods take org_id, enforces tenant isolation)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L17-L24",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_requirement_service",
+      "label": "requirement_service (create, parse_text_to_items, upload_file, submit, edit_line_items)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L26-L46",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_requirements_router",
+      "label": "requirements Router (GET/POST /projects/{project_id}/requirements/*)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L48-L56",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_use_requirements_hook",
+      "label": "useRequirements React Query Hook (accepts projectId)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L58-L64",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_submit_page",
+      "label": "SubmitPage (text area + file upload, parse button, editable TanStack Table)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L66-L74",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_parse_text_regex",
+      "label": "Regex Text Parser (parse_text_to_items — NO AI, pure regex for qty/unit/description)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L33-L40",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tenantreqs_org_id_enforcement_rationale",
+      "label": "Rationale: org_id Enforcement in Every Repository Method (tenant isolation by design)",
+      "file_type": "document",
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L1-L2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "readme_procurelink_v2",
+      "target": "readme_frontend_stack",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L3",
+      "weight": 1
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "readme_backend_stack",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "readme_queue_stack",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L5",
+      "weight": 1
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "readme_storage_stack",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L6",
+      "weight": 1
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "readme_observability_stack",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L8",
+      "weight": 1
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "readme_mailhog",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L7",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_fastapi",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_uvicorn",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_sqlalchemy",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_alembic",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_pydantic",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_pydantic_settings",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_psycopg2_binary",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_queue_stack",
+      "target": "requirements_celery",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L5",
+      "weight": 1
+    },
+    {
+      "source": "readme_queue_stack",
+      "target": "requirements_redis_client",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L5",
+      "weight": 1
+    },
+    {
+      "source": "readme_storage_stack",
+      "target": "requirements_boto3",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L6",
+      "weight": 1
+    },
+    {
+      "source": "readme_observability_stack",
+      "target": "requirements_prometheus_instrumentator",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "README.md",
+      "source_location": "L8",
+      "weight": 1
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_jinja2",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "README.md",
+      "source_location": "L64",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_reportlab",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_slowapi",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_pytest",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_backend_stack",
+      "target": "requirements_factory_boy",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "README.md",
+      "source_location": "L4",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_frontend_stack",
+      "target": "indexhtml_frontend_entry",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "README.md",
+      "source_location": "L3",
+      "weight": 0.8
+    },
+    {
+      "source": "indexhtml_frontend_entry",
+      "target": "indexhtml_main_tsx",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "frontend/index.html",
+      "source_location": "L12",
+      "weight": 1
+    },
+    {
+      "source": "indexhtml_frontend_entry",
+      "target": "indexhtml_google_fonts",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "frontend/index.html",
+      "source_location": "L6-L9",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_organisation_model",
+      "target": "multitenant_project_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L8",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_organisation_model",
+      "target": "multitenant_user_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L23",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_organisation_model",
+      "target": "multitenant_invitation_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L18",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_project_model",
+      "target": "multitenant_projectmember_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L13",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_user_model",
+      "target": "multitenant_projectmember_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L13",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_user_model",
+      "target": "multitenant_invitation_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L18",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_org_repo",
+      "target": "multitenant_organisation_model",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L29-L32",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_project_repo",
+      "target": "multitenant_project_model",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L34",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_project_repo",
+      "target": "multitenant_projectmember_model",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L37",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_auth_service",
+      "target": "multitenant_org_repo",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L45",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_auth_service",
+      "target": "multitenant_invitation_model",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L49",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_auth_service",
+      "target": "multitenant_user_model",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L45",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_auth_service",
+      "target": "requirements_python_jose",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L47",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_auth_service",
+      "target": "requirements_passlib",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L45",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_auth_router",
+      "target": "multitenant_auth_service",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L59-L64",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_projects_router",
+      "target": "multitenant_project_repo",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L66-L73",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_login_page",
+      "target": "multitenant_auth_router",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L75",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_register_page",
+      "target": "multitenant_auth_router",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L75",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_accept_invite_page",
+      "target": "multitenant_auth_router",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L75",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_project_list_page",
+      "target": "multitenant_projects_router",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L76",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_project_settings_page",
+      "target": "multitenant_projects_router",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L76",
+      "weight": 0.8
+    },
+    {
+      "source": "multitenant_project_switcher",
+      "target": "multitenant_project_list_page",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L77-L80",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_alembic_migration",
+      "target": "multitenant_organisation_model",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_alembic_migration",
+      "target": "multitenant_user_model",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_alembic_migration",
+      "target": "multitenant_project_model",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_alembic_migration",
+      "target": "multitenant_projectmember_model",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_alembic_migration",
+      "target": "multitenant_invitation_model",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "weight": 1
+    },
+    {
+      "source": "multitenant_alembic_migration",
+      "target": "requirements_alembic",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md",
+      "source_location": "L82",
+      "weight": 0.8
+    },
+    {
+      "source": "projectcontext_procurement_workflow",
+      "target": "multitenant_organisation_model",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "projectcontext_procurement_workflow",
+      "target": "multitenant_project_model",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "projectcontext_procurement_workflow",
+      "target": "tenantreqs_requirement_model",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "projectcontext_tenant_isolation_rule",
+      "target": "projectcontext_architecture_pattern",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L12-L16",
+      "weight": 1
+    },
+    {
+      "source": "projectcontext_role_hierarchy",
+      "target": "multitenant_user_model",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L9",
+      "weight": 1
+    },
+    {
+      "source": "projectcontext_role_hierarchy",
+      "target": "multitenant_projectmember_model",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L9",
+      "weight": 1
+    },
+    {
+      "source": "projectcontext_architecture_pattern",
+      "target": "multitenant_auth_router",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L28-L32",
+      "weight": 0.8
+    },
+    {
+      "source": "projectcontext_architecture_pattern",
+      "target": "multitenant_auth_service",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L28-L32",
+      "weight": 0.8
+    },
+    {
+      "source": "projectcontext_architecture_pattern",
+      "target": "multitenant_org_repo",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L28-L32",
+      "weight": 0.8
+    },
+    {
+      "source": "projectcontext_tenant_isolation_rule",
+      "target": "multitenant_org_repo",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L12-L16",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirement_model",
+      "target": "multitenant_organisation_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_requirement_model",
+      "target": "multitenant_project_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L4",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_requirement_model",
+      "target": "tenantreqs_lineitem_model",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L12",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_requirement_repo",
+      "target": "tenantreqs_requirement_model",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L17",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirement_repo",
+      "target": "tenantreqs_lineitem_model",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L23",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirement_repo",
+      "target": "projectcontext_tenant_isolation_rule",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L17",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_requirement_service",
+      "target": "tenantreqs_requirement_repo",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L26",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirement_service",
+      "target": "tenantreqs_parse_text_regex",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L33",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_requirement_service",
+      "target": "readme_storage_stack",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L41",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_requirement_service",
+      "target": "requirements_boto3",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L41",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirement_service",
+      "target": "requirements_python_multipart",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L41",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirements_router",
+      "target": "tenantreqs_requirement_service",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L48",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_requirements_router",
+      "target": "multitenant_auth_service",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L50",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_use_requirements_hook",
+      "target": "tenantreqs_requirements_router",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L58",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_submit_page",
+      "target": "tenantreqs_use_requirements_hook",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L66",
+      "weight": 0.8
+    },
+    {
+      "source": "tenantreqs_submit_page",
+      "target": "multitenant_project_switcher",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L67",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_org_id_enforcement_rationale",
+      "target": "projectcontext_tenant_isolation_rule",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L1-L2",
+      "weight": 1
+    },
+    {
+      "source": "tenantreqs_parse_text_regex",
+      "target": "tenantreqs_requirement_service",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md",
+      "source_location": "L33",
+      "weight": 1
+    },
+    {
+      "source": "requirements_reportlab",
+      "target": "projectcontext_procurement_workflow",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "backend/requirements.txt",
+      "source_location": "L18",
+      "weight": 0.8
+    },
+    {
+      "source": "requirements_jinja2",
+      "target": "readme_mailhog",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "backend/requirements.txt",
+      "source_location": "L17",
+      "weight": 0.8
+    },
+    {
+      "source": "requirements_slowapi",
+      "target": "multitenant_auth_router",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "backend/requirements.txt",
+      "source_location": "L19",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "projectcontext_procurement_workflow",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L1",
+      "weight": 0.8
+    },
+    {
+      "source": "readme_procurelink_v2",
+      "target": "projectcontext_tenant_isolation_rule",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "githubcopilot/Projectcontext.md",
+      "source_location": "L1",
+      "weight": 0.8
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "multitenant_data_layer",
+      "label": "Multi-tenant Data Layer (ORM Models)",
+      "nodes": [
+        "multitenant_organisation_model",
+        "multitenant_user_model",
+        "multitenant_project_model",
+        "multitenant_projectmember_model",
+        "multitenant_invitation_model"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md"
+    },
+    {
+      "id": "auth_workflow",
+      "label": "Authentication & Invitation Workflow",
+      "nodes": [
+        "multitenant_auth_service",
+        "multitenant_auth_router",
+        "multitenant_login_page",
+        "multitenant_register_page",
+        "multitenant_accept_invite_page"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md"
+    },
+    {
+      "id": "backend_core_tech_stack",
+      "label": "Backend Core Technology Stack",
+      "nodes": [
+        "requirements_fastapi",
+        "requirements_sqlalchemy",
+        "requirements_alembic",
+        "requirements_celery",
+        "requirements_redis_client",
+        "requirements_pydantic",
+        "requirements_psycopg2_binary"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "backend/requirements.txt"
+    },
+    {
+      "id": "requirements_crud_module",
+      "label": "Requirements CRUD Module (tenant-scoped)",
+      "nodes": [
+        "tenantreqs_requirement_model",
+        "tenantreqs_lineitem_model",
+        "tenantreqs_requirement_repo",
+        "tenantreqs_requirement_service",
+        "tenantreqs_requirements_router"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md"
+    },
+    {
+      "id": "frontend_auth_pages",
+      "label": "Frontend Auth Pages",
+      "nodes": [
+        "multitenant_login_page",
+        "multitenant_register_page",
+        "multitenant_accept_invite_page"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Multi-tenant schema + auth.md"
+    },
+    {
+      "id": "tenant_isolation_enforcement",
+      "label": "Tenant Isolation Enforcement Pattern",
+      "nodes": [
+        "projectcontext_tenant_isolation_rule",
+        "tenantreqs_requirement_repo",
+        "multitenant_org_repo",
+        "multitenant_project_repo",
+        "tenantreqs_org_id_enforcement_rationale"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Projectcontext.md"
+    },
+    {
+      "id": "security_auth_packages",
+      "label": "Security & Auth Python Packages",
+      "nodes": [
+        "requirements_python_jose",
+        "requirements_passlib",
+        "requirements_slowapi"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "backend/requirements.txt"
+    },
+    {
+      "id": "requirements_frontend_submission",
+      "label": "Requirements Frontend Submission Flow",
+      "nodes": [
+        "tenantreqs_submit_page",
+        "tenantreqs_use_requirements_hook",
+        "multitenant_project_switcher",
+        "tenantreqs_parse_text_regex"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "source_file": "githubcopilot/Tenant-scoped requirements module.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}
