@@ -14,7 +14,7 @@ if %ERRORLEVEL% NEQ 0 (
     echo [WARN] Docker Compose failed. Attempting direct backend startup...
     echo        Make sure PostgreSQL and Redis are running locally.
     echo.
-    start "ProcureLink Backend" cmd /k "cd /d %~dp0backend && uvicorn app.main:app --host 0.0.0.0 --port 2000 --reload"
+    start "ProcureLink Backend" cmd /k "cd /d %~dp0backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 ) else (
     echo [OK] Backend services started.
 )
@@ -28,8 +28,8 @@ start "ProcureLink Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"
 echo.
 echo ========================================
 echo  Services starting:
-echo   Backend API  : http://localhost:2000
-echo   API Docs     : http://localhost:2000/docs
+echo   Backend API  : http://localhost:8000
+echo   API Docs     : http://localhost:8000/docs
 echo   Frontend     : http://localhost:5173
 echo ========================================
 echo.

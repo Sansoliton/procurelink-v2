@@ -1,0 +1,47 @@
+# .gitignore for Procurelink v2
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+ENV/
+venv/
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# VSCode
+.vscode/
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic
+alembic/versions/*.pyc
+
+# Cache
+.cache/
+*.cache
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+*.pid
+
+# Misc
+*.swp
+*.swo
+
+# Monitoring
+monitoring/*.data
