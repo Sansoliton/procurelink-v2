@@ -45,3 +45,8 @@ alembic/versions/*.pyc
 
 # Monitoring
 monitoring/*.data
+
+# SQLite database (runtime file, never commit)
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal

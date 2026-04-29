@@ -629,23 +629,21 @@ function QuotationPage({
               size="md"
             />
             <p className="text-[9px] text-gray-400 italic print:hidden">Customer logo</p>
+            <p className="text-[9px] text-gray-400 italic">Japanese High-Quality Products</p>
+
           </div>
 
-          {/* Center: Quotation title */}
+          {/* Center: Quotation title only */}
           <div className="text-center flex-1 mx-6 mt-2">
             <h1 className="text-3xl font-bold tracking-wide text-gray-900">Quotation</h1>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Japanese High-Quality Products
-            </p>
           </div>
 
-          {/* Right: company logo + name */}
+          {/* Right: company logo + subtitle + name */}
           <div className="flex flex-col items-end gap-1">
             <LogoUpload
               value={doc.issuerLogoImage}
               onChange={(v) => {
                 onChange({ ...doc, issuerLogoImage: v })
-                // persist to profile
                 try {
                   const p = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}')
                   localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
