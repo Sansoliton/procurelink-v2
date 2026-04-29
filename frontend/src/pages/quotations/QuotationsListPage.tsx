@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react'
+import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign, Paperclip } from 'lucide-react'
 import { Button, Badge, EmptyState } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
+import { readData, writeData } from '@/lib/storage'
 import type { QuotationStatus } from './QuotationEditorPage'
 
 interface QuotationRow {
@@ -15,6 +16,7 @@ interface QuotationRow {
   status: string
   invoiceId?: string
   poNumber?: string
+  poAttachment?: string
   createdAt: string
 }
 
@@ -56,7 +58,7 @@ export default function QuotationsListPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('pl_quotations')
+      const raw = readData('pl_quotations')
       if (raw) {
         const parsed = JSON.parse(raw)
         const list: QuotationRow[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
@@ -68,13 +70,13 @@ export default function QuotationsListPage() {
   function handleDelete(id: string) {
     if (!confirm('Delete this quotation?')) return
     try {
-      const raw = localStorage.getItem('pl_quotations')
+      const raw = readData('pl_quotations')
       if (!raw) return
       const list: QuotationRow[] = JSON.parse(raw)
       const updated = Array.isArray(list)
         ? list.filter(q => q.id !== id)
         : Object.values(list as Record<string, QuotationRow>).filter(q => q.id !== id)
-      localStorage.setItem('pl_quotations', JSON.stringify(updated))
+      writeData('pl_quotations', JSON.stringify(updated))
       setQuotations(prev => prev.filter(q => q.id !== id))
     } catch { /* ok */ }
   }
@@ -176,6 +178,7 @@ export default function QuotationsListPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount (AED)</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Stage</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">PO</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -194,6 +197,24 @@ export default function QuotationsListPage() {
                     <Badge variant={STATUS_VARIANT[q.status] ?? 'gray'}>
                       {STATUS_LABEL[q.status as QuotationStatus] ?? q.status}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                    {q.poNumber ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-xs font-mono font-semibold text-amber-700">{q.poNumber}</span>
+                        {q.poAttachment && (
+                          <a
+                            href={q.poAttachment}
+                            download={`PO-${q.poNumber}.pdf`}
+                            className="flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline"
+                          >
+                            <Paperclip className="w-2.5 h-2.5" /> file
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end" onClick={e => e.stopPropagation()}>

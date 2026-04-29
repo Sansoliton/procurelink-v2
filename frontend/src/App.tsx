@@ -1,20 +1,18 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { useState, useRef, useEffect } from 'react'
 import {
-  ChevronDown, Bell, LogOut, FolderOpen, BarChart2, Package,
-  LayoutDashboard, FileText, Building2, TrendingUp, Receipt, ClipboardList,
+  Bell, LogOut, BarChart2, Package,
+  Building2, Receipt, ClipboardList, Settings,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
-import { ProjectProvider, useProject } from '@/context/ProjectContext'
-import { projectsApi, notificationsApi } from '@/api'
+import { ProjectProvider } from '@/context/ProjectContext'
+import { notificationsApi } from '@/api'
 import { Spinner } from '@/components/ui'
 
 // Pages
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
 import AcceptInvitePage from '@/pages/auth/AcceptInvitePage'
-import DashboardPage from '@/pages/projects/DashboardPage'
 import ProjectsPage from '@/pages/projects/ProjectsPage'
 import ProjectDetailPage from '@/pages/projects/ProjectDetailPage'
 import SubmitPage from '@/pages/requirements/SubmitPage'
@@ -32,6 +30,7 @@ import QuotationsListPage from '@/pages/quotations/QuotationsListPage'
 import QuotationEditorPage from '@/pages/quotations/QuotationEditorPage'
 import InvoicesListPage from '@/pages/invoices/InvoicesListPage'
 import InvoiceEditorPage from '@/pages/invoices/InvoiceEditorPage'
+import StoragePage from '@/pages/settings/StoragePage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } })
 
@@ -41,58 +40,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   if (isLoading) return <div className="flex items-center justify-center h-screen"><Spinner size="lg" /></div>
   if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
-}
-
-// ── Project switcher dropdown ────────────────────────────────────
-function ProjectSwitcher() {
-  const { activeProject, setActiveProject } = useProject()
-  const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list })
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 px-2 py-1 rounded-md hover:bg-gray-100 w-full"
-      >
-        <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
-        <span className="flex-1 text-left max-w-[120px] truncate">{activeProject?.name ?? 'Select project'}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-          <div className="p-1">
-            {projects?.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => { setActiveProject(p); setOpen(false) }}
-                className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
-                  activeProject?.id === p.id
-                    ? 'bg-blue-50 text-blue-700 font-medium'
-                    : 'hover:bg-gray-50 text-gray-700'
-                }`}
-              >
-                {p.name}
-              </button>
-            ))}
-            {!projects?.length && (
-              <p className="px-3 py-2 text-xs text-gray-400">No projects yet</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
 }
 
 // ── Notification bell ────────────────────────────────────────────
@@ -139,24 +86,8 @@ function LeftSidebar() {
         <NotifBell />
       </div>
 
-      <ProjectSwitcher />
-
       <nav className="flex flex-col gap-0.5 mt-4 flex-1 overflow-y-auto">
-        <p className={section}>Main</p>
-        <NavLink to="/" end className={linkCls}>
-          <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-          Dashboard
-        </NavLink>
-        <NavLink to="/projects-showcase" className={linkCls}>
-          <FolderOpen className="w-4 h-4 flex-shrink-0" />
-          All Projects
-        </NavLink>
-
         <p className={section}>Procurement</p>
-        <NavLink to="/submit" className={linkCls}>
-          <FileText className="w-4 h-4 flex-shrink-0" />
-          New Requirement
-        </NavLink>
         <NavLink to="/vendors" className={linkCls}>
           <Package className="w-4 h-4 flex-shrink-0" />
           Vendors
@@ -179,6 +110,12 @@ function LeftSidebar() {
         <NavLink to="/analytics" className={linkCls}>
           <BarChart2 className="w-4 h-4 flex-shrink-0" />
           Analytics
+        </NavLink>
+
+        <p className={section}>System</p>
+        <NavLink to="/settings/storage" className={linkCls}>
+          <Settings className="w-4 h-4 flex-shrink-0" />
+          Storage
         </NavLink>
       </nav>
 
@@ -234,7 +171,7 @@ export default function App() {
                 <PrivateRoute>
                   <AppLayout>
                     <Routes>
-                      <Route path="/" element={<DashboardPage />} />
+                      <Route path="/" element={<Navigate to="/quotations" replace />} />
                       <Route path="/projects" element={<ProjectsPage />} />
                       <Route path="/projects/:id" element={<ProjectDetailPage />} />
                       <Route path="/projects-showcase" element={<ProjectsShowcasePage />} />
@@ -251,6 +188,7 @@ export default function App() {
                       <Route path="/quotations/:id" element={<QuotationEditorPage />} />
                       <Route path="/invoices" element={<InvoicesListPage />} />
                       <Route path="/invoices/:id" element={<InvoiceEditorPage />} />
+                      <Route path="/settings/storage" element={<StoragePage />} />
                     </Routes>
                   </AppLayout>
                 </PrivateRoute>

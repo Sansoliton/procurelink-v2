@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
+import { readData, writeData } from '@/lib/storage'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type QuotationStatus = 'draft' | 'shared' | 'acknowledged' | 'po_received' | 'invoiced' | 'complete'
@@ -95,7 +96,7 @@ const DEFAULT_PROFILE = {
 // ── Storage helpers ────────────────────────────────────────────────
 function loadAll(): QuotationDoc[] {
   try {
-    const raw = localStorage.getItem(Q_KEY)
+    const raw = readData(Q_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : Object.values(parsed)
@@ -103,7 +104,7 @@ function loadAll(): QuotationDoc[] {
 }
 
 function saveAll(docs: QuotationDoc[]) {
-  localStorage.setItem(Q_KEY, JSON.stringify(docs))
+  writeData(Q_KEY, JSON.stringify(docs))
 }
 
 function nextNo(): string {
@@ -119,7 +120,7 @@ function nextNo(): string {
 }
 
 function loadProfile() {
-  try { return { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') } }
+  try { return { ...DEFAULT_PROFILE, ...JSON.parse(readData(PROFILE_KEY) ?? '{}') } }
   catch { return DEFAULT_PROFILE }
 }
 
@@ -127,7 +128,12 @@ function newLine(): QLine {
   return { _key: crypto.randomUUID(), description: '', qty: '', unitPrice: '', amount: '' }
 }
 
-// Estimation logic removed
+function estimateRows(line: QLine): number {
+  const chars = (line.description || '').length
+  if (chars <= 70) return 1
+  if (chars <= 140) return 2
+  return Math.ceil(chars / 70)
+}
 
 function buildPages(lines: QLine[]): QLine[][] {
   const pages: QLine[][] = []
@@ -641,8 +647,8 @@ function QuotationPage({
                 onChange({ ...doc, issuerLogoImage: v })
                 // persist to profile
                 try {
-                  const p = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}')
-                  localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
+                  const p = JSON.parse(readData(PROFILE_KEY) ?? '{}')
+                  writeData(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
                 } catch { /* ok */ }
               }}
               size="md"
@@ -993,7 +999,7 @@ function generateInvoice(doc: QuotationDoc): string {
   const yy = new Date().getFullYear().toString().slice(-2)
   let existing: { id: string; invoiceNo: string }[] = []
   try {
-    const raw = localStorage.getItem(INV_KEY)
+    const raw = readData(INV_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       existing = Array.isArray(parsed) ? parsed : Object.values(parsed)
@@ -1040,7 +1046,7 @@ function generateInvoice(doc: QuotationDoc): string {
     createdAt: new Date().toISOString(),
   }
 
-  localStorage.setItem(INV_KEY, JSON.stringify([...existing, newInvoice]))
+  writeData(INV_KEY, JSON.stringify([...existing, newInvoice]))
   return newInvoice.id
 }
 
@@ -1131,7 +1137,7 @@ export default function QuotationEditorPage() {
   const pickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    try { setCustomers(JSON.parse(localStorage.getItem(C_KEY) ?? '[]')) } catch { /* ok */ }
+    try { setCustomers(JSON.parse(readData(C_KEY) ?? '[]')) } catch { /* ok */ }
   }, [])
 
   useEffect(() => {
@@ -1217,7 +1223,7 @@ export default function QuotationEditorPage() {
   }
 
   function saveProfile() {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({
+    writeData(PROFILE_KEY, JSON.stringify({
       name:      doc.issuerName,
       logoText:  doc.issuerLogoText,
       logoImage: doc.issuerLogoImage,
