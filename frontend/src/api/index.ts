@@ -3,6 +3,7 @@ import type {
   TokenResponse, User, Project, ProjectMember, Vendor,
   Requirement, LineItem, RFQ, Quotation, VendorPO, PurchaseOrder,
   Invoice, Notification, AnalyticsOverview,
+  Customer, CustomerQuotation, CustomerInvoice,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api' })
@@ -34,10 +35,17 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<TokenResponse>('/auth/login', { email, password }).then((r) => r.data),
   me: () => api.get<User>('/auth/me').then((r) => r.data),
+  refresh: () => api.post<TokenResponse>('/auth/refresh').then((r) => r.data),
   invite: (email: string, org_role: string) =>
     api.post<{ token: string; expires_at: string }>('/auth/invite', { email, org_role }).then((r) => r.data),
   acceptInvite: (token: string, password: string, full_name?: string) =>
     api.post<TokenResponse>('/auth/accept-invite', { token, password, full_name }).then((r) => r.data),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post('/auth/change-password', { current_password, new_password }).then((r) => r.data),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, new_password: string) =>
+    api.post('/auth/reset-password', { token, new_password }).then((r) => r.data),
 }
 
 // ── Projects ────────────────────────────────────────────────────
@@ -77,6 +85,14 @@ export const requirementsApi = {
     api.put<Requirement>(`/projects/${projectId}/requirements/${id}/items`, items).then((r) => r.data),
   submit: (projectId: string, id: string) =>
     api.post<Requirement>(`/projects/${projectId}/requirements/${id}/submit`).then((r) => r.data),
+  uploadFile: (projectId: string, id: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<{ file_path: string; url: string }>(
+      `/projects/${projectId}/requirements/${id}/upload`, fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ).then((r) => r.data)
+  },
 }
 
 // ── RFQs ────────────────────────────────────────────────────────
@@ -128,4 +144,38 @@ export const analyticsApi = {
   overview: () => api.get<AnalyticsOverview>('/analytics/overview').then((r) => r.data),
 }
 
+// ── Customers ────────────────────────────────────────────────────
+export const customersApi = {
+  list: () => api.get<Customer[]>('/customers/').then((r) => r.data),
+  get: (id: string) => api.get<Customer>(`/customers/${id}`).then((r) => r.data),
+  create: (data: Omit<Customer, 'id' | 'org_id' | 'created_at'>) =>
+    api.post<Customer>('/customers/', data).then((r) => r.data),
+  update: (id: string, data: Partial<Customer>) =>
+    api.put<Customer>(`/customers/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/customers/${id}`).then((r) => r.data),
+}
+
+// ── Customer Quotations (sales-side) ────────────────────────────
+export const cquotesApi = {
+  list: () => api.get<CustomerQuotation[]>('/cquotes/').then((r) => r.data),
+  get: (id: string) => api.get<CustomerQuotation>(`/cquotes/${id}`).then((r) => r.data),
+  create: (data: Omit<CustomerQuotation, 'id' | 'org_id' | 'created_at' | 'updated_at'>) =>
+    api.post<CustomerQuotation>('/cquotes/', data).then((r) => r.data),
+  update: (id: string, data: Partial<CustomerQuotation>) =>
+    api.put<CustomerQuotation>(`/cquotes/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/cquotes/${id}`).then((r) => r.data),
+}
+
+// ── Customer Invoices (sales-side) ───────────────────────────────
+export const cinvoicesApi = {
+  list: () => api.get<CustomerInvoice[]>('/cinvoices/').then((r) => r.data),
+  get: (id: string) => api.get<CustomerInvoice>(`/cinvoices/${id}`).then((r) => r.data),
+  create: (data: Omit<CustomerInvoice, 'id' | 'org_id' | 'created_at' | 'updated_at'>) =>
+    api.post<CustomerInvoice>('/cinvoices/', data).then((r) => r.data),
+  update: (id: string, data: Partial<CustomerInvoice>) =>
+    api.put<CustomerInvoice>(`/cinvoices/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/cinvoices/${id}`).then((r) => r.data),
+}
+
 export default api
+

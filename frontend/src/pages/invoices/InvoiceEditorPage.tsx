@@ -5,6 +5,7 @@ import {
   Settings, X, Check, Upload, Bold, Italic, List, CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui'
+import { cinvoicesApi } from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type InvoiceStatus = 'pending' | 'paid' | 'overdue'
@@ -606,6 +607,29 @@ export default function InvoiceEditorPage() {
 
   const [showSettings, setShowSettings] = useState(false)
   const [saved, setSaved] = useState(!!id)
+  const [apiId, setApiId] = useState<number | null>(null)
+
+  // Load from API on mount if editing
+  useEffect(() => {
+    if (!id) return
+    cinvoicesApi.list().then((list: any[]) => {
+      const found = list.find(inv => String(inv.id) === id || (inv.doc_data as any)?.id === id)
+      if (found) {
+        setApiId(found.id)
+        const d = found.doc_data as InvoiceDoc
+        setDoc({
+          ...d,
+          invoiceStatus: d.invoiceStatus ?? 'pending',
+          issuerLogoImage: d.issuerLogoImage ?? '',
+          customerLogoImage: d.customerLogoImage ?? '',
+          quotationNo: d.quotationNo ?? '',
+          poNumber: d.poNumber ?? '',
+          poDate: d.poDate ?? '',
+          dueDate: d.dueDate ?? '',
+        })
+      }
+    }).catch(() => { /* fall through to localStorage */ })
+  }, [id])
 
   const updateDoc = useCallback((d: InvoiceDoc) => { setDoc(d); setSaved(false) }, [])
 
@@ -631,6 +655,24 @@ export default function InvoiceEditorPage() {
   function handleSave() {
     const all = loadAll().filter(i => i.id !== doc.id)
     saveAll([...all, doc]); setSaved(true)
+    // Backend API save
+    const subtotalVal = doc.lines.reduce((s, l) => s + calcLine(l), 0)
+    const vatVal = subtotalVal * (doc.vatPct / 100)
+    const payload = {
+      invoice_no: doc.invoiceNo,
+      quotation_no: doc.quotationNo || undefined,
+      customer_name: doc.customerName || undefined,
+      status: doc.invoiceStatus,
+      total_amount: subtotalVal + vatVal,
+      doc_data: doc as unknown as Record<string, unknown>,
+    }
+    if (apiId) {
+      cinvoicesApi.update(String(apiId), payload).catch(() => { /* silent */ })
+    } else {
+      cinvoicesApi.create(payload).then((res: any) => {
+        if (res?.id) setApiId(res.id)
+      }).catch(() => { /* silent */ })
+    }
   }
 
   function handlePrint() { handleSave(); window.print() }

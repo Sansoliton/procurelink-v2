@@ -194,3 +194,49 @@ export interface AnalyticsOverview {
   overdue_invoices: number
   avg_cycle_days: number
 }
+
+// Customers
+export interface Customer {
+  id: string
+  org_id: string
+  company: string
+  contact_name?: string
+  email?: string
+  phone?: string
+  industry?: string
+  website?: string
+  city?: string
+  notes?: string
+  logo_image?: string
+  status: 'active' | 'inactive'
+  created_at: string
+}
+
+// Customer Quotations (sales-side)
+export interface CustomerQuotation {
+  id: string
+  org_id: string
+  quotation_no: string
+  customer_id?: string
+  customer_name?: string
+  status: string
+  total_amount: number
+  doc_data: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+// Customer Invoices (sales-side)
+export interface CustomerInvoice {
+  id: string
+  org_id: string
+  invoice_no: string
+  quotation_no?: string
+  customer_id?: string
+  customer_name?: string
+  status: string
+  total_amount: number
+  doc_data: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}

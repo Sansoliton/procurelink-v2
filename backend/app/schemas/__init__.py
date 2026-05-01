@@ -87,12 +87,14 @@ class VendorCreate(BaseModel):
     name: str
     email: EmailStr
     categories: List[str] = []
+    catalog_items: List[dict] = []
     rating: Optional[float] = 4.0
 
 class VendorUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     categories: Optional[List[str]] = None
+    catalog_items: Optional[List[dict]] = None
     rating: Optional[float] = None
     is_active: Optional[bool] = None
 
@@ -102,6 +104,7 @@ class VendorOut(BaseModel):
     name: str
     email: str
     categories: List[str]
+    catalog_items: List[dict] = []
     rating: float
     is_active: bool
     class Config: from_attributes = True
@@ -262,3 +265,114 @@ class AnalyticsOverviewOut(BaseModel):
     open_rfqs: int
     overdue_invoices: int
     avg_cycle_days: float
+
+
+# ── Customers ──────────────────────────────────────────────────────
+
+class CustomerCreate(BaseModel):
+    company: str
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    city: Optional[str] = None
+    notes: Optional[str] = None
+    logo_image: Optional[str] = None
+    status: str = "active"
+
+class CustomerUpdate(BaseModel):
+    company: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    city: Optional[str] = None
+    notes: Optional[str] = None
+    logo_image: Optional[str] = None
+    status: Optional[str] = None
+
+class CustomerOut(BaseModel):
+    id: str
+    org_id: str
+    company: str
+    contact_name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    industry: Optional[str]
+    website: Optional[str]
+    city: Optional[str]
+    notes: Optional[str]
+    logo_image: Optional[str]
+    status: str
+    created_at: datetime
+    class Config: from_attributes = True
+
+
+# ── Customer Quotations (sales-side) ───────────────────────────────
+
+class CustomerQuotationUpsert(BaseModel):
+    quotation_no: str
+    customer_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    status: str = "draft"
+    total_amount: float = 0.0
+    doc_data: dict = {}
+
+class CustomerQuotationOut(BaseModel):
+    id: str
+    org_id: str
+    quotation_no: str
+    customer_id: Optional[str]
+    customer_name: Optional[str]
+    status: str
+    total_amount: float
+    doc_data: dict
+    created_at: datetime
+    updated_at: datetime
+    class Config: from_attributes = True
+
+
+# ── Customer Invoices (sales-side) ─────────────────────────────────
+
+class CustomerInvoiceUpsert(BaseModel):
+    invoice_no: str
+    quotation_no: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    status: str = "pending"
+    total_amount: float = 0.0
+    doc_data: dict = {}
+
+class CustomerInvoiceOut(BaseModel):
+    id: str
+    org_id: str
+    invoice_no: str
+    quotation_no: Optional[str]
+    customer_id: Optional[str]
+    customer_name: Optional[str]
+    status: str
+    total_amount: float
+    doc_data: dict
+    created_at: datetime
+    updated_at: datetime
+    class Config: from_attributes = True
+
+
+# ── Auth extras ────────────────────────────────────────────────────
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class FileUploadOut(BaseModel):
+    file_path: str
+    url: str

@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
 import { readData, writeData } from '@/lib/storage'
+import { cquotesApi, customersApi } from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type QuotationStatus = 'draft' | 'shared' | 'acknowledged' | 'po_received' | 'invoiced' | 'complete'
@@ -604,11 +605,13 @@ interface PageProps {
   onLineChange: (key: string, field: keyof QLine, val: string) => void
   onAddLine: () => void
   onRemoveLine: (key: string) => void
+  onCustomerLogoChange: (b64: string) => void
 }
 
 function QuotationPage({
   doc, lines, pageNum, totalPages, subtotal, vatAmt, grandTotal,
   isLastPage, isFirstPage, onChange, onLineChange, onAddLine, onRemoveLine,
+  onCustomerLogoChange,
 }: PageProps) {
   const set = (f: keyof QuotationDoc) => (v: string) => onChange({ ...doc, [f]: v })
 
@@ -625,7 +628,10 @@ function QuotationPage({
           <div className="flex flex-col items-start gap-1">
             <LogoUpload
               value={doc.customerLogoImage}
-              onChange={set('customerLogoImage')}
+              onChange={(v) => {
+                onChange({ ...doc, customerLogoImage: v })
+                onCustomerLogoChange(v)
+              }}
               size="md"
             />
             <p className="text-[9px] text-gray-400 italic print:hidden">Customer logo</p>
@@ -1134,11 +1140,53 @@ export default function QuotationEditorPage() {
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [saved, setSaved] = useState(!!id)
+  const [apiId, setApiId] = useState<number | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
 
+  // Load customers from API (fallback to localStorage)
   useEffect(() => {
-    try { setCustomers(JSON.parse(readData(C_KEY) ?? '[]')) } catch { /* ok */ }
+    customersApi.list().then(list => {
+      setCustomers(list.map((c: any) => ({
+        id: String(c.id),
+        company: c.company,
+        contactName: c.contact_name ?? '',
+        email: c.email ?? '',
+        phone: c.phone ?? '',
+        city: c.city ?? '',
+        industry: c.industry ?? '',
+        website: c.website ?? '',
+        notes: c.notes ?? '',
+        status: c.status,
+        logoImage: c.logo_image ?? '',
+      })))
+    }).catch(() => {
+      try { setCustomers(JSON.parse(readData(C_KEY) ?? '[]')) } catch { /* ok */ }
+    })
   }, [])
+
+  // Load quotation from API if editing
+  useEffect(() => {
+    if (!id) return
+    cquotesApi.list().then((list: any[]) => {
+      const found = list.find(q => String(q.id) === id || (q.doc_data as any)?.id === id)
+      if (found) {
+        setApiId(found.id)
+        const d = found.doc_data as QuotationDoc
+        setDoc({
+          ...d,
+          issuerLogoImage: d.issuerLogoImage ?? '',
+          customerLogoImage: d.customerLogoImage ?? '',
+          status: normalizeStatus(d.status),
+          poNumber: d.poNumber ?? '',
+          poDate: d.poDate ?? '',
+          invoiceId: d.invoiceId ?? '',
+          sharedDate: d.sharedDate ?? '',
+          acknowledgedDate: d.acknowledgedDate ?? '',
+          poReceivedDate: d.poReceivedDate ?? '',
+        })
+      }
+    }).catch(() => { /* fall through to localStorage */ })
+  }, [id])
 
   useEffect(() => {
     function outside(e: MouseEvent) {
@@ -1182,9 +1230,27 @@ export default function QuotationEditorPage() {
 
   function handleSave(overrideDoc?: QuotationDoc) {
     const target = overrideDoc ?? doc
+    // localStorage save (keep for offline/print compat)
     const all = loadAll().filter(q => q.id !== target.id)
     saveAll([...all, target])
     setSaved(true)
+    // Backend API save (fire and forget)
+    const subtotalVal = target.lines.reduce((s, l) => s + calcLine(l), 0)
+    const vatVal = subtotalVal * (target.vatPct / 100)
+    const payload = {
+      quotation_no: target.quotationNo,
+      customer_name: target.customerName || undefined,
+      status: target.status,
+      total_amount: subtotalVal + vatVal,
+      doc_data: target as unknown as Record<string, unknown>,
+    }
+    if (apiId) {
+      cquotesApi.update(String(apiId), payload).catch(() => { /* silent */ })
+    } else {
+      cquotesApi.create(payload).then((res: any) => {
+        if (res?.id) setApiId(res.id)
+      }).catch(() => { /* silent */ })
+    }
   }
 
   function handlePrint() {
@@ -1350,6 +1416,11 @@ export default function QuotationEditorPage() {
               onLineChange={updateLine}
               onAddLine={addLine}
               onRemoveLine={removeLine}
+              onCustomerLogoChange={(b64) => {
+                if (doc.customerId) {
+                  customersApi.update(doc.customerId, { logo_image: b64 }).catch(() => { /* silent */ })
+                }
+              }}
             />
           ))}
         </div>

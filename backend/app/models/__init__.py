@@ -353,3 +353,72 @@ class AuditLog(Base):
     entity_id = Column(String, nullable=True)
     detail = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ── Customer directory (per-org, buyer-side) ──────────────────────
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    org_id = Column(String, ForeignKey("organisations.id"), nullable=False)
+    company = Column(String(200), nullable=False)
+    contact_name = Column(String(200), nullable=True)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(50), nullable=True)
+    industry = Column(String(100), nullable=True)
+    website = Column(String(300), nullable=True)
+    city = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    logo_image = Column(Text, nullable=True)   # base64 data URL
+    status = Column(String(20), default="active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Sales-side quotations (issued to customers) ───────────────────
+
+class CustomerQuotation(Base):
+    __tablename__ = "customer_quotations"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    org_id = Column(String, ForeignKey("organisations.id"), nullable=False)
+    quotation_no = Column(String(50), nullable=False)
+    customer_id = Column(String, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(200), nullable=True)
+    status = Column(String(30), default="draft")
+    total_amount = Column(Float, default=0.0)
+    doc_data = Column(JSON, default=dict)   # full QuotationDoc JSON
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Sales-side invoices (issued to customers) ─────────────────────
+
+class CustomerInvoice(Base):
+    __tablename__ = "customer_invoices"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    org_id = Column(String, ForeignKey("organisations.id"), nullable=False)
+    invoice_no = Column(String(50), nullable=False)
+    quotation_no = Column(String(50), nullable=True)
+    customer_id = Column(String, ForeignKey("customers.id"), nullable=True)
+    customer_name = Column(String(200), nullable=True)
+    status = Column(String(20), default="pending")
+    total_amount = Column(Float, default=0.0)
+    doc_data = Column(JSON, default=dict)   # full InvoiceDoc JSON
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Password reset tokens ─────────────────────────────────────────
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

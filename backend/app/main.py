@@ -12,6 +12,7 @@ from app.routers import (
     auth_router, projects_router, vendors_router,
     requirements_router, rfqs_router, quotes_router,
     notifications_router, analytics_router, health_router,
+    customers_router, cquotes_router, cinvoices_router,
 )
 
 # Create all tables (use alembic in production)
@@ -52,6 +53,9 @@ app.include_router(quotes_router)
 app.include_router(notifications_router)
 app.include_router(analytics_router)
 app.include_router(health_router)
+app.include_router(customers_router)
+app.include_router(cquotes_router)
+app.include_router(cinvoices_router)
 
 @app.get("/")
 def root():

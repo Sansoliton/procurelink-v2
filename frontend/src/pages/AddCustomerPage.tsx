@@ -1,34 +1,21 @@
 import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Building2, Plus, Pencil, Trash2, Search, X,
   Phone, Globe, MapPin, Mail, User, Check,
 } from 'lucide-react'
 import { Card, CardTitle, Button, Badge, EmptyState } from '@/components/ui'
-
-interface Customer {
-  id: string
-  company: string
-  contactName: string
-  email: string
-  phone: string
-  industry: string
-  website: string
-  city: string
-  notes: string
-  status: 'active' | 'inactive'
-  createdAt: string
-}
-
-const STORAGE_KEY = 'pl_customers'
+import { customersApi } from '@/api'
+import type { Customer } from '@/types'
 
 const INDUSTRIES = [
   'Manufacturing', 'Construction', 'Oil & Gas', 'Automotive',
   'Aerospace', 'Chemical', 'Food & Beverage', 'Mining', 'Utilities', 'Other',
 ]
 
-const BLANK: Omit<Customer, 'id' | 'createdAt'> = {
+const BLANK: Omit<Customer, 'id' | 'org_id' | 'created_at'> = {
   company: '',
-  contactName: '',
+  contact_name: '',
   email: '',
   phone: '',
   industry: '',
@@ -38,28 +25,45 @@ const BLANK: Omit<Customer, 'id' | 'createdAt'> = {
   status: 'active',
 }
 
-function loadCustomers(): Customer[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
-}
-
-function persist(list: Customer[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-}
-
 export default function AddCustomerPage() {
-  const [customers, setCustomers] = useState<Customer[]>(loadCustomers)
+  const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ ...BLANK })
   const [search, setSearch] = useState('')
   const [saved, setSaved] = useState(false)
 
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: customersApi.list,
+  })
+
+  const createMut = useMutation({
+    mutationFn: (data: typeof BLANK) => customersApi.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); finishSave() },
+  })
+
+  const updateMut = useMutation({
+    mutationFn: (data: typeof BLANK) => customersApi.update(editingId!, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); finishSave() },
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => customersApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+  })
+
+  function finishSave() {
+    setSaved(true)
+    setTimeout(() => { setShowForm(false); setSaved(false) }, 700)
+  }
+
   const filtered = customers.filter(
     (c) =>
       search === '' ||
       c.company.toLowerCase().includes(search.toLowerCase()) ||
-      c.contactName.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()),
+      (c.contact_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.email ?? '').toLowerCase().includes(search.toLowerCase()),
   )
 
   function openAdd() {
@@ -70,34 +74,25 @@ export default function AddCustomerPage() {
   }
 
   function openEdit(c: Customer) {
-    const { id: _id, createdAt: _ts, ...rest } = c
-    setForm(rest)
+    const { id: _id, org_id: _o, created_at: _ts, ...rest } = c
+    setForm(rest as typeof BLANK)
     setEditingId(c.id)
     setShowForm(true)
     setSaved(false)
   }
 
   function handleSave() {
-    if (!form.company.trim() || !form.email.trim()) return
-    let updated: Customer[]
+    if (!form.company.trim()) return
     if (editingId) {
-      updated = customers.map((c) => (c.id === editingId ? { ...c, ...form } : c))
+      updateMut.mutate(form)
     } else {
-      updated = [
-        { ...form, id: crypto.randomUUID(), createdAt: new Date().toISOString() },
-        ...customers,
-      ]
+      createMut.mutate(form)
     }
-    setCustomers(updated)
-    persist(updated)
-    setSaved(true)
-    setTimeout(() => { setShowForm(false); setSaved(false) }, 700)
   }
 
   function handleDelete(id: string) {
-    const updated = customers.filter((c) => c.id !== id)
-    setCustomers(updated)
-    persist(updated)
+    if (!confirm('Delete this customer?')) return
+    deleteMut.mutate(id)
   }
 
   function setField(key: keyof typeof BLANK, value: string) {
@@ -152,8 +147,8 @@ export default function AddCustomerPage() {
               <input
                 className="input-base"
                 placeholder="e.g. John Smith"
-                value={form.contactName}
-                onChange={(e) => setField('contactName', e.target.value)}
+                value={form.contact_name ?? ''}
+                onChange={(e) => setField('contact_name', e.target.value)}
               />
             </div>
             <div>
@@ -296,9 +291,9 @@ export default function AddCustomerPage() {
                       {c.industry && <Badge variant="blue">{c.industry}</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
-                      {c.contactName && (
+                      {c.contact_name && (
                         <span className="flex items-center gap-1 text-xs text-gray-500">
-                          <User className="w-3 h-3" />{c.contactName}
+                          <User className="w-3 h-3" />{c.contact_name}
                         </span>
                       )}
                       <span className="flex items-center gap-1 text-xs text-gray-500">

@@ -1,32 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign, Paperclip } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react'
 import { Button, Badge, EmptyState } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
-import { readData, writeData } from '@/lib/storage'
+import { cquotesApi } from '@/api'
+import type { CustomerQuotation } from '@/types'
 import type { QuotationStatus } from './QuotationEditorPage'
-
-interface QuotationRow {
-  id: string
-  quotationNo: string
-  date: string
-  customerName: string
-  lines: { qty: string; unitPrice: string; amount: string }[]
-  vatPct: number
-  status: string
-  invoiceId?: string
-  poNumber?: string
-  poAttachment?: string
-  createdAt: string
-}
-
-function calcTotal(doc: QuotationRow): number {
-  const sub = doc.lines.reduce((s, l) => {
-    const q = parseFloat(l.qty), p = parseFloat(l.unitPrice)
-    return s + ((!isNaN(q) && !isNaN(p)) ? q * p : (parseFloat(l.amount) || 0))
-  }, 0)
-  return sub + sub * (doc.vatPct / 100)
-}
 
 const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'purple'> = {
   draft:        'gray',
@@ -35,7 +15,6 @@ const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber'
   po_received:  'amber',
   invoiced:     'blue',
   complete:     'green',
-  // legacy
   final:        'blue',
   sent:         'blue',
   approved:     'green',
@@ -53,44 +32,35 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function QuotationsListPage() {
   const nav = useNavigate()
-  const [quotations, setQuotations] = useState<QuotationRow[]>([])
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    try {
-      const raw = readData('pl_quotations')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        const list: QuotationRow[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
-        setQuotations(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-      }
-    } catch { /* ok */ }
-  }, [])
+  const { data: quotations = [] } = useQuery({
+    queryKey: ['cquotes'],
+    queryFn: cquotesApi.list,
+  })
 
-  function handleDelete(id: string) {
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => cquotesApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cquotes'] }),
+  })
+
+  function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
     if (!confirm('Delete this quotation?')) return
-    try {
-      const raw = readData('pl_quotations')
-      if (!raw) return
-      const list: QuotationRow[] = JSON.parse(raw)
-      const updated = Array.isArray(list)
-        ? list.filter(q => q.id !== id)
-        : Object.values(list as Record<string, QuotationRow>).filter(q => q.id !== id)
-      writeData('pl_quotations', JSON.stringify(updated))
-      setQuotations(prev => prev.filter(q => q.id !== id))
-    } catch { /* ok */ }
+    deleteMut.mutate(id)
   }
 
   const filtered = quotations.filter(q =>
-    q.quotationNo?.toLowerCase().includes(search.toLowerCase()) ||
-    q.customerName?.toLowerCase().includes(search.toLowerCase())
+    q.quotation_no?.toLowerCase().includes(search.toLowerCase()) ||
+    (q.customer_name ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalValue = quotations.reduce((s, q) => s + calcTotal(q), 0)
-  const poApproved = quotations.filter(q => q.status === 'po_received' || q.status === 'invoiced' || q.status === 'complete')
-  const poApprovedValue = poApproved.reduce((s, q) => s + calcTotal(q), 0)
-  const inProgress = quotations.filter(q => q.status === 'draft' || q.status === 'shared' || q.status === 'acknowledged' || q.status === 'final')
-  const inProgressValue = inProgress.reduce((s, q) => s + calcTotal(q), 0)
+  const totalValue = quotations.reduce((s, q) => s + (q.total_amount ?? 0), 0)
+  const poApproved = quotations.filter(q => ['po_received', 'invoiced', 'complete'].includes(q.status))
+  const poApprovedValue = poApproved.reduce((s, q) => s + (q.total_amount ?? 0), 0)
+  const inProgress = quotations.filter(q => ['draft', 'shared', 'acknowledged', 'final'].includes(q.status))
+  const inProgressValue = inProgress.reduce((s, q) => s + (q.total_amount ?? 0), 0)
 
   const fmt = (n: number) => n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -103,7 +73,7 @@ export default function QuotationsListPage() {
             Quotations
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {quotations.length} quotation{quotations.length !== 1 ? 's' : ''} saved locally
+            {quotations.length} quotation{quotations.length !== 1 ? 's' : ''}
           </p>
         </div>
         <Button variant="primary" onClick={() => nav('/quotations/new')}>
@@ -187,11 +157,11 @@ export default function QuotationsListPage() {
                 <tr key={q.id}
                   className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => nav(`/quotations/${q.id}`)}>
-                  <td className="px-4 py-3 font-mono font-semibold text-blue-700">{q.quotationNo}</td>
-                  <td className="px-4 py-3 text-gray-800">{q.customerName || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{q.date ? formatDate(q.date) : '—'}</td>
+                  <td className="px-4 py-3 font-mono font-semibold text-blue-700">{q.quotation_no}</td>
+                  <td className="px-4 py-3 text-gray-800">{q.customer_name || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{q.created_at ? formatDate(q.created_at) : '—'}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                    {calcTotal(q).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {(q.total_amount ?? 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <Badge variant={STATUS_VARIANT[q.status] ?? 'gray'}>
@@ -199,38 +169,19 @@ export default function QuotationsListPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
-                    {q.poNumber ? (
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span className="text-xs font-mono font-semibold text-amber-700">{q.poNumber}</span>
-                        {q.poAttachment && (
-                          <a
-                            href={q.poAttachment}
-                            download={`PO-${q.poNumber}.pdf`}
-                            className="flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline"
-                          >
-                            <Paperclip className="w-2.5 h-2.5" /> file
-                          </a>
-                        )}
-                      </div>
+                    {(q.doc_data as any)?.poNumber ? (
+                      <span className="text-xs font-mono font-semibold text-amber-700">{(q.doc_data as any).poNumber}</span>
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end" onClick={e => e.stopPropagation()}>
-                      {q.invoiceId && (
-                        <button
-                          onClick={() => nav(`/invoices/${q.invoiceId}`)}
-                          className="text-xs text-blue-600 hover:underline px-2 py-1"
-                        >
-                          Invoice →
-                        </button>
-                      )}
                       <button onClick={() => nav(`/quotations/${q.id}`)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => handleDelete(q.id)}
+                      <button onClick={(e) => handleDelete(e, q.id)}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

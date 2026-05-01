@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 're
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import {
   Bell, LogOut, BarChart2, Package,
-  Building2, Receipt, ClipboardList, Settings,
+  Building2, Receipt, ClipboardList, Settings, FolderOpen,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ProjectProvider } from '@/context/ProjectContext'
@@ -31,6 +31,7 @@ import QuotationEditorPage from '@/pages/quotations/QuotationEditorPage'
 import InvoicesListPage from '@/pages/invoices/InvoicesListPage'
 import InvoiceEditorPage from '@/pages/invoices/InvoiceEditorPage'
 import StoragePage from '@/pages/settings/StoragePage'
+import DashboardPage from '@/pages/projects/DashboardPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } })
 
@@ -88,6 +89,10 @@ function LeftSidebar() {
 
       <nav className="flex flex-col gap-0.5 mt-4 flex-1 overflow-y-auto">
         <p className={section}>Procurement</p>
+        <NavLink to="/projects" className={linkCls}>
+          <FolderOpen className="w-4 h-4 flex-shrink-0" />
+          Projects
+        </NavLink>
         <NavLink to="/vendors" className={linkCls}>
           <Package className="w-4 h-4 flex-shrink-0" />
           Vendors
@@ -172,6 +177,7 @@ export default function App() {
                   <AppLayout>
                     <Routes>
                       <Route path="/" element={<Navigate to="/quotations" replace />} />
+                      <Route path="/dashboard" element={<DashboardPage />} />
                       <Route path="/projects" element={<ProjectsPage />} />
                       <Route path="/projects/:id" element={<ProjectDetailPage />} />
                       <Route path="/projects-showcase" element={<ProjectsShowcasePage />} />

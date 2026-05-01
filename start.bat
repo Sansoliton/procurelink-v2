@@ -6,9 +6,9 @@ echo  ProcureLink v2 - Starting Application
 echo ========================================
 echo.
 
-:: Start Backend (Docker Compose)
+:: Start Backend services only (frontend runs as Vite dev server below)
 echo [1/2] Starting backend services via Docker Compose...
-docker-compose up -d
+docker-compose up -d api worker beat flower db redis minio mailhog prometheus grafana
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [WARN] Docker Compose failed. Attempting direct backend startup...

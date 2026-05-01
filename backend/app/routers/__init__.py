@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 import random
+import uuid
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -10,8 +12,9 @@ from app.database import get_db
 from app.models import (
     User, Organisation, Project, ProjectMember, Vendor,
     Requirement, LineItem, RFQ, QuoteLine, Quotation, VendorPO,
-    PurchaseOrder, Invoice, Notification, RFQStatus,
-    RequirementStatus, QuotationStatus, POStatus, InvoiceStatus
+    PurchaseOrder, Invoice, Notification, AuditLog,
+    Customer, CustomerQuotation, CustomerInvoice, PasswordResetToken,
+    RFQStatus, RequirementStatus, QuotationStatus, POStatus, InvoiceStatus
 )
 from app.schemas import (
     RegisterRequest, LoginRequest, TokenResponse, InviteRequest, AcceptInviteRequest,
@@ -22,13 +25,50 @@ from app.schemas import (
     QuoteSubmitRequest, RFQOut,
     QuotationOut, VendorPOOut, PurchaseOrderOut, InvoiceOut,
     NotificationOut, UnreadCountOut, AnalyticsOverviewOut,
+    CustomerCreate, CustomerUpdate, CustomerOut,
+    CustomerQuotationUpsert, CustomerQuotationOut,
+    CustomerInvoiceUpsert, CustomerInvoiceOut,
+    PasswordChangeRequest, ForgotPasswordRequest, ResetPasswordRequest,
+    FileUploadOut,
 )
 from app.services.auth_service import (
     register_user, login_user, create_access_token,
     get_current_user, require_org_admin,
     invite_user, accept_invitation,
+    hash_password, verify_password,
 )
-from app.services.parser_service import parse_text_to_items
+
+log = logging.getLogger(__name__)
+
+
+# ── Helpers ────────────────────────────────────────────────────────
+
+def _notify(db: Session, *, org_id: str, user_id: str, project_id: Optional[str],
+            type: str, title: str, body: str = "", entity_type: str = "", entity_id: str = ""):
+    """Insert a notification row. Swallow errors so primary request is never blocked."""
+    try:
+        db.add(Notification(
+            org_id=org_id, user_id=user_id, project_id=project_id,
+            type=type, title=title, body=body,
+            entity_type=entity_type, entity_id=entity_id,
+        ))
+    except Exception as exc:
+        log.warning("_notify failed: %s", exc)
+
+
+def _audit(db: Session, *, org_id: str, user_id: str, action: str,
+           entity_type: str = "", entity_id: str = "", detail: dict = {}):
+    """Append an audit log entry. Swallow errors."""
+    try:
+        db.add(AuditLog(
+            org_id=org_id, user_id=user_id, action=action,
+            entity_type=entity_type, entity_id=entity_id, detail=detail,
+        ))
+    except Exception as exc:
+        log.warning("_audit failed: %s", exc)
+
+
+from app.services.parser_service import parse_text_to_items  # noqa: E402
 
 
 # ── Auth router ────────────────────────────────────────────────────
@@ -62,6 +102,70 @@ def invite(
 def accept_invite(payload: AcceptInviteRequest, db: Session = Depends(get_db)):
     user = accept_invitation(payload.token, payload.password, payload.full_name, db)
     return {"access_token": create_access_token(user.id)}
+
+
+@auth_router.post("/change-password")
+def change_password(
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(400, "Current password is incorrect")
+    current_user.hashed_password = hash_password(payload.new_password)
+    _audit(db, org_id=current_user.org_id, user_id=current_user.id,
+           action="password_changed", entity_type="user", entity_id=current_user.id)
+    db.commit()
+    return {"status": "password updated"}
+
+
+@auth_router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user:
+        token = str(uuid.uuid4())
+        db.add(PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=2),
+        ))
+        db.commit()
+        # In production wire to send_email_task; for dev just return the token
+        from app.worker import send_email_task
+        try:
+            send_email_task.delay(
+                user.email,
+                "ProcureLink — Reset your password",
+                f"<p>Your password reset token: <b>{token}</b></p><p>Expires in 2 hours.</p>",
+            )
+        except Exception:
+            pass
+    # Always return 200 to avoid email enumeration
+    return {"status": "If that email exists, a reset link has been sent"}
+
+
+@auth_router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    prt = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == payload.token,
+        PasswordResetToken.used_at.is_(None),
+        PasswordResetToken.expires_at > datetime.utcnow(),
+    ).first()
+    if not prt:
+        raise HTTPException(400, "Invalid or expired reset token")
+    user = db.get(User, prt.user_id)
+    if not user:
+        raise HTTPException(400, "User not found")
+    user.hashed_password = hash_password(payload.new_password)
+    prt.used_at = datetime.utcnow()
+    db.commit()
+    return {"status": "password reset successful"}
+
+
+@auth_router.post("/refresh", response_model=TokenResponse)
+def refresh_token(current_user: User = Depends(get_current_user)):
+    """Issue a fresh token for the authenticated user (sliding session)."""
+    return {"access_token": create_access_token(current_user.id)}
 
 
 # ── Projects router ────────────────────────────────────────────────
@@ -309,6 +413,64 @@ def submit_requirement(
     return req
 
 
+@requirements_router.post("/{req_id}/upload", response_model=FileUploadOut)
+async def upload_requirement_file(
+    project_id: str,
+    req_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload an attachment to a requirement (stored in MinIO)."""
+    req = db.query(Requirement).filter(
+        Requirement.id == req_id, Requirement.org_id == current_user.org_id
+    ).first()
+    if not req:
+        raise HTTPException(404, "Requirement not found")
+
+    from app.config import settings
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    object_name = f"requirements/{req_id}/{file.filename}"
+    try:
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"http{'s' if settings.minio_secure else ''}://{settings.minio_endpoint}",
+            aws_access_key_id=settings.minio_access_key,
+            aws_secret_access_key=settings.minio_secret_key,
+        )
+        # Ensure bucket exists
+        try:
+            s3.head_bucket(Bucket=settings.minio_bucket)
+        except ClientError:
+            s3.create_bucket(Bucket=settings.minio_bucket)
+
+        content = await file.read()
+        s3.put_object(
+            Bucket=settings.minio_bucket,
+            Key=object_name,
+            Body=content,
+            ContentType=file.content_type or "application/octet-stream",
+        )
+        url = f"http{'s' if settings.minio_secure else ''}://{settings.minio_endpoint}/{settings.minio_bucket}/{object_name}"
+    except (BotoCoreError, ClientError, Exception) as exc:
+        log.warning("MinIO upload failed: %s", exc)
+        # Fallback: store locally under /tmp for dev
+        import os
+        os.makedirs(f"/tmp/uploads/requirements/{req_id}", exist_ok=True)
+        local_path = f"/tmp/uploads/requirements/{req_id}/{file.filename}"
+        content = await file.read() if not content else content
+        with open(local_path, "wb") as f_out:
+            f_out.write(content)
+        url = f"/uploads/requirements/{req_id}/{file.filename}"
+        object_name = local_path
+
+    req.file_path = object_name
+    db.commit()
+    return {"file_path": object_name, "url": url}
+
+
 # ── RFQ router ─────────────────────────────────────────────────────
 
 rfqs_router = APIRouter(prefix="/rfqs", tags=["rfqs"])
@@ -342,13 +504,37 @@ def send_rfqs(
             sent_at=datetime.utcnow(),
         )
         db.add(rfq)
-        rfqs.append(rfq)
+        rfqs.append((rfq, vendor))
 
     req.status = RequirementStatus.rfq_sent
+    db.flush()
+
+    for rfq, vendor in rfqs:
+        db.refresh(rfq)
+        _notify(db, org_id=current_user.org_id, user_id=current_user.id,
+                project_id=req.project_id, type="rfq_sent",
+                title=f"RFQ sent to {vendor.name}",
+                body=f"RFQ for '{req.title}' sent to {vendor.name}. Deadline: {deadline.strftime('%Y-%m-%d')}",
+                entity_type="rfq", entity_id=rfq.id)
+        _audit(db, org_id=current_user.org_id, user_id=current_user.id,
+               action="rfq_sent", entity_type="rfq", entity_id=rfq.id,
+               detail={"vendor": vendor.name, "requirement": req.title})
+        # Fire email to vendor
+        from app.worker import send_email_task
+        try:
+            send_email_task.delay(
+                vendor.email,
+                f"Request for Quotation — {req.title}",
+                f"""<p>Dear {vendor.name},</p>
+                <p>You have received a new Request for Quotation for: <b>{req.title}</b>.</p>
+                <p>Please respond by <b>{deadline.strftime('%d %b %Y')}</b>.</p>
+                <p>Reference RFQ ID: {rfq.id}</p>""",
+            )
+        except Exception as exc:
+            log.warning("RFQ email failed for vendor %s: %s", vendor.email, exc)
+
     db.commit()
-    for r in rfqs:
-        db.refresh(r)
-    return rfqs
+    return [rfq for rfq, _ in rfqs]
 
 @rfqs_router.get("/requirement/{req_id}", response_model=List[RFQOut])
 def list_rfqs(
@@ -393,11 +579,20 @@ def respond_to_rfq(rfq_id: str, payload: QuoteSubmitRequest, db: Session = Depen
         req = db.get(Requirement, rfq.requirement_id)
         if req:
             req.status = RequirementStatus.quotes_received
+            # Notify all org admins
+            org_admins = db.query(User).filter(
+                User.org_id == rfq.org_id,
+                User.org_role.in_(["org-admin", "super-admin"]),
+                User.is_active == True,
+            ).all()
+            for admin in org_admins:
+                _notify(db, org_id=rfq.org_id, user_id=admin.id,
+                        project_id=rfq.project_id, type="quotes_received",
+                        title="All vendor quotes received",
+                        body=f"All RFQs for '{req.title}' have been responded to. Ready to build quotation.",
+                        entity_type="requirement", entity_id=req.id)
             db.commit()
     return {"status": "quote submitted"}
-
-
-@rfqs_router.post("/{rfq_id}/respond-internal", response_model=dict)
 def respond_to_rfq_internal(
     rfq_id: str,
     payload: QuoteSubmitRequest,
@@ -559,6 +754,14 @@ def approve_quotation(
     req = db.get(Requirement, q.requirement_id)
     if req:
         req.status = RequirementStatus.approved
+    _notify(db, org_id=current_user.org_id, user_id=current_user.id,
+            project_id=req.project_id if req else None, type="quotation_approved",
+            title=f"Quotation {q.reference} approved",
+            body=f"Customer total: {q.customer_total}. Ready to raise PO.",
+            entity_type="quotation", entity_id=q.id)
+    _audit(db, org_id=current_user.org_id, user_id=current_user.id,
+           action="quotation_approved", entity_type="quotation", entity_id=q.id,
+           detail={"reference": q.reference, "customer_total": q.customer_total})
     db.commit()
     db.refresh(q)
     return q
@@ -621,6 +824,14 @@ def raise_po(
     req = db.get(Requirement, q.requirement_id)
     if req:
         req.status = RequirementStatus.po_raised
+    _notify(db, org_id=current_user.org_id, user_id=current_user.id,
+            project_id=req.project_id if req else None, type="po_raised",
+            title=f"PO {po.reference} raised",
+            body=f"{len(vendor_groups)} vendor PO(s) created.",
+            entity_type="purchase_order", entity_id=po.id)
+    _audit(db, org_id=current_user.org_id, user_id=current_user.id,
+           action="po_raised", entity_type="purchase_order", entity_id=po.id,
+           detail={"reference": po.reference, "vendor_count": len(vendor_groups)})
     db.commit()
     db.refresh(po)
     return po
@@ -661,6 +872,14 @@ def raise_invoice(
     req = db.get(Requirement, q.requirement_id)
     if req:
         req.status = RequirementStatus.invoiced
+    _notify(db, org_id=current_user.org_id, user_id=current_user.id,
+            project_id=req.project_id if req else None, type="invoice_raised",
+            title=f"Invoice {invoice.reference} issued",
+            body=f"Amount: {invoice.amount}. Due in 30 days.",
+            entity_type="invoice", entity_id=invoice.id)
+    _audit(db, org_id=current_user.org_id, user_id=current_user.id,
+           action="invoice_raised", entity_type="invoice", entity_id=invoice.id,
+           detail={"reference": invoice.reference, "amount": invoice.amount})
     db.commit()
     db.refresh(invoice)
     return invoice
@@ -678,6 +897,14 @@ def mark_paid(
         raise HTTPException(404, "Not found")
     inv.status = InvoiceStatus.paid
     inv.paid_at = datetime.utcnow()
+    _audit(db, org_id=current_user.org_id, user_id=current_user.id,
+           action="invoice_paid", entity_type="invoice", entity_id=inv.id,
+           detail={"reference": inv.reference, "amount": inv.amount})
+    _notify(db, org_id=current_user.org_id, user_id=current_user.id,
+            project_id=None, type="invoice_paid",
+            title=f"Invoice {inv.reference} marked paid",
+            body=f"Amount: {inv.amount} collected.",
+            entity_type="invoice", entity_id=inv.id)
     db.commit()
     db.refresh(inv)
     return inv
@@ -789,13 +1016,38 @@ def analytics_overview(
         Invoice.status == InvoiceStatus.issued,
         Invoice.due_at < datetime.utcnow(),
     ).count()
+
+    # Compute avg cycle days: creation → po_raised for completed requirements
+    completed_reqs = db.query(Requirement).filter(
+        Requirement.org_id == org_id,
+        Requirement.status.in_(["po_raised", "invoiced", "completed"]),
+    ).all()
+    cycle_days = 0.0
+    if completed_reqs:
+        total_days = 0.0
+        counted = 0
+        for r in completed_reqs:
+            po = (
+                db.query(PurchaseOrder)
+                .join(Quotation, PurchaseOrder.quotation_id == Quotation.id)
+                .filter(Quotation.requirement_id == r.id)
+                .first()
+            )
+            if po and r.created_at:
+                delta = (po.raised_at - r.created_at).total_seconds() / 86400
+                if delta >= 0:
+                    total_days += delta
+                    counted += 1
+        if counted:
+            cycle_days = round(total_days / counted, 1)
+
     return {
         "total_requirements": total_reqs,
         "active_projects": active_projects,
         "total_po_value": round(po_value, 2),
         "open_rfqs": open_rfqs,
         "overdue_invoices": overdue,
-        "avg_cycle_days": 0.0,
+        "avg_cycle_days": cycle_days,
     }
 
 
@@ -815,3 +1067,210 @@ def health(db: Session = Depends(get_db)):
         "db": "ok" if db_ok else "fail",
         "version": "2.0.0",
     }
+
+
+# ── Customers router ───────────────────────────────────────────────
+
+customers_router = APIRouter(prefix="/customers", tags=["customers"])
+
+@customers_router.get("/", response_model=List[CustomerOut])
+def list_customers(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Customer).filter(Customer.org_id == current_user.org_id).order_by(Customer.company).all()
+
+@customers_router.post("/", response_model=CustomerOut)
+def create_customer(
+    payload: CustomerCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    customer = Customer(org_id=current_user.org_id, **payload.model_dump())
+    db.add(customer)
+    db.commit()
+    db.refresh(customer)
+    return customer
+
+@customers_router.get("/{customer_id}", response_model=CustomerOut)
+def get_customer(
+    customer_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    c = db.query(Customer).filter(Customer.id == customer_id, Customer.org_id == current_user.org_id).first()
+    if not c:
+        raise HTTPException(404, "Customer not found")
+    return c
+
+@customers_router.put("/{customer_id}", response_model=CustomerOut)
+def update_customer(
+    customer_id: str,
+    payload: CustomerUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    c = db.query(Customer).filter(Customer.id == customer_id, Customer.org_id == current_user.org_id).first()
+    if not c:
+        raise HTTPException(404, "Customer not found")
+    for k, val in payload.model_dump(exclude_unset=True).items():
+        setattr(c, k, val)
+    db.commit()
+    db.refresh(c)
+    return c
+
+@customers_router.delete("/{customer_id}")
+def delete_customer(
+    customer_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    c = db.query(Customer).filter(Customer.id == customer_id, Customer.org_id == current_user.org_id).first()
+    if not c:
+        raise HTTPException(404, "Customer not found")
+    db.delete(c)
+    db.commit()
+    return {"status": "deleted"}
+
+
+# ── Customer Quotations router (sales-side) ────────────────────────
+
+cquotes_router = APIRouter(prefix="/cquotes", tags=["customer-quotations"])
+
+@cquotes_router.get("/", response_model=List[CustomerQuotationOut])
+def list_cquotes(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return (
+        db.query(CustomerQuotation)
+        .filter(CustomerQuotation.org_id == current_user.org_id)
+        .order_by(CustomerQuotation.created_at.desc())
+        .all()
+    )
+
+@cquotes_router.post("/", response_model=CustomerQuotationOut)
+def create_cquote(
+    payload: CustomerQuotationUpsert,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cq = CustomerQuotation(org_id=current_user.org_id, **payload.model_dump())
+    db.add(cq)
+    db.commit()
+    db.refresh(cq)
+    return cq
+
+@cquotes_router.get("/{cq_id}", response_model=CustomerQuotationOut)
+def get_cquote(
+    cq_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cq = db.query(CustomerQuotation).filter(
+        CustomerQuotation.id == cq_id, CustomerQuotation.org_id == current_user.org_id
+    ).first()
+    if not cq:
+        raise HTTPException(404, "Not found")
+    return cq
+
+@cquotes_router.put("/{cq_id}", response_model=CustomerQuotationOut)
+def update_cquote(
+    cq_id: str,
+    payload: CustomerQuotationUpsert,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cq = db.query(CustomerQuotation).filter(
+        CustomerQuotation.id == cq_id, CustomerQuotation.org_id == current_user.org_id
+    ).first()
+    if not cq:
+        raise HTTPException(404, "Not found")
+    for k, val in payload.model_dump(exclude_unset=True).items():
+        setattr(cq, k, val)
+    cq.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(cq)
+    return cq
+
+@cquotes_router.delete("/{cq_id}")
+def delete_cquote(
+    cq_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cq = db.query(CustomerQuotation).filter(
+        CustomerQuotation.id == cq_id, CustomerQuotation.org_id == current_user.org_id
+    ).first()
+    if not cq:
+        raise HTTPException(404, "Not found")
+    db.delete(cq)
+    db.commit()
+    return {"status": "deleted"}
+
+
+# ── Customer Invoices router (sales-side) ──────────────────────────
+
+cinvoices_router = APIRouter(prefix="/cinvoices", tags=["customer-invoices"])
+
+@cinvoices_router.get("/", response_model=List[CustomerInvoiceOut])
+def list_cinvoices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return (
+        db.query(CustomerInvoice)
+        .filter(CustomerInvoice.org_id == current_user.org_id)
+        .order_by(CustomerInvoice.created_at.desc())
+        .all()
+    )
+
+@cinvoices_router.post("/", response_model=CustomerInvoiceOut)
+def create_cinvoice(
+    payload: CustomerInvoiceUpsert,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ci = CustomerInvoice(org_id=current_user.org_id, **payload.model_dump())
+    db.add(ci)
+    db.commit()
+    db.refresh(ci)
+    return ci
+
+@cinvoices_router.get("/{ci_id}", response_model=CustomerInvoiceOut)
+def get_cinvoice(
+    ci_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ci = db.query(CustomerInvoice).filter(
+        CustomerInvoice.id == ci_id, CustomerInvoice.org_id == current_user.org_id
+    ).first()
+    if not ci:
+        raise HTTPException(404, "Not found")
+    return ci
+
+@cinvoices_router.put("/{ci_id}", response_model=CustomerInvoiceOut)
+def update_cinvoice(
+    ci_id: str,
+    payload: CustomerInvoiceUpsert,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ci = db.query(CustomerInvoice).filter(
+        CustomerInvoice.id == ci_id, CustomerInvoice.org_id == current_user.org_id
+    ).first()
+    if not ci:
+        raise HTTPException(404, "Not found")
+    for k, val in payload.model_dump(exclude_unset=True).items():
+        setattr(ci, k, val)
+    ci.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(ci)
+    return ci
+
+@cinvoices_router.delete("/{ci_id}")
+def delete_cinvoice(
+    ci_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ci = db.query(CustomerInvoice).filter(
+        CustomerInvoice.id == ci_id, CustomerInvoice.org_id == current_user.org_id
+    ).first()
+    if not ci:
+        raise HTTPException(404, "Not found")
+    db.delete(ci)
+    db.commit()
+    return {"status": "deleted"}

@@ -50,3 +50,4 @@ alembic/versions/*.pyc
 
 # Monitoring
 monitoring/*.data
+*.pyc
