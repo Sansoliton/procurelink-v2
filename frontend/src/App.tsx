@@ -89,10 +89,6 @@ function LeftSidebar() {
 
       <nav className="flex flex-col gap-0.5 mt-4 flex-1 overflow-y-auto">
         <p className={section}>Procurement</p>
-        <NavLink to="/projects" className={linkCls}>
-          <FolderOpen className="w-4 h-4 flex-shrink-0" />
-          Projects
-        </NavLink>
         <NavLink to="/vendors" className={linkCls}>
           <Package className="w-4 h-4 flex-shrink-0" />
           Vendors

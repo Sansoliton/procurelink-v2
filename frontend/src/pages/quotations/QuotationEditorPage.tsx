@@ -825,18 +825,26 @@ function QuotationPage({
               </tr>
             </tfoot>
           )}
-        </table>
 
-        {isLastPage && (
-          <button
-            onClick={onAddLine}
-            className="print:hidden flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800
-              border border-dashed border-blue-300 hover:border-blue-500 rounded px-3 py-1.5 transition-colors mb-2"
-          >
-            <Plus className="w-3 h-3" />
-            Add line
-          </button>
-        )}
+          {/* Add line row — inside the table, last page only */}
+          {isLastPage && (
+            <tbody className="print:hidden">
+              <tr>
+                <td
+                  colSpan={6}
+                  className="border border-dashed border-blue-200 py-1.5 px-2 cursor-pointer
+                    hover:bg-blue-50/40 transition-colors group"
+                  onClick={onAddLine}
+                >
+                  <span className="flex items-center gap-1 text-xs text-blue-400 group-hover:text-blue-600">
+                    <Plus className="w-3 h-3" />
+                    Add line
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          )}
+        </table>
       </div>
 
       {/* ── Footer (last page only) ───────────────────────────── */}
