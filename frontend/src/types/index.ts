@@ -162,6 +162,14 @@ export interface PurchaseOrder {
   raised_at: string
 }
 
+export interface PurchaseOrderDetail extends PurchaseOrder {
+  quotation_id: string
+  quotation_ref: string
+  total_amount: number
+  vendor_count: number
+  pdf_url?: string
+}
+
 export interface Invoice {
   id: string
   reference: string
@@ -208,6 +216,7 @@ export interface Customer {
   city?: string
   notes?: string
   logo_image?: string
+  logo_url?: string
   status: 'active' | 'inactive'
   created_at: string
 }
@@ -222,6 +231,7 @@ export interface CustomerQuotation {
   status: string
   total_amount: number
   doc_data: Record<string, unknown>
+  pdf_url?: string
   created_at: string
   updated_at: string
 }
@@ -237,6 +247,7 @@ export interface CustomerInvoice {
   status: string
   total_amount: number
   doc_data: Record<string, unknown>
+  pdf_url?: string
   created_at: string
   updated_at: string
 }

@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import {
-  Bell, LogOut, BarChart2, Package,
-  Building2, Receipt, ClipboardList, Settings, FolderOpen,
+  Bell, LogOut, Package,
+  Building2, Receipt, ClipboardList, Settings, FolderOpen, ShoppingCart,
 } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ProjectProvider } from '@/context/ProjectContext'
@@ -32,6 +32,7 @@ import InvoicesListPage from '@/pages/invoices/InvoicesListPage'
 import InvoiceEditorPage from '@/pages/invoices/InvoiceEditorPage'
 import StoragePage from '@/pages/settings/StoragePage'
 import DashboardPage from '@/pages/projects/DashboardPage'
+import PurchaseOrdersListPage from '@/pages/procurement/PurchaseOrdersListPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } })
 
@@ -88,29 +89,27 @@ function LeftSidebar() {
       </div>
 
       <nav className="flex flex-col gap-0.5 mt-4 flex-1 overflow-y-auto">
-        <p className={section}>Procurement</p>
-        <NavLink to="/vendors" className={linkCls}>
-          <Package className="w-4 h-4 flex-shrink-0" />
-          Vendors
-        </NavLink>
-        {/* Estimation nav removed */}
-        <NavLink to="/add-customer" className={linkCls}>
-          <Building2 className="w-4 h-4 flex-shrink-0" />
-          Customers
-        </NavLink>
         <NavLink to="/quotations" className={linkCls}>
           <Receipt className="w-4 h-4 flex-shrink-0" />
           Quotations
+        </NavLink>
+        <NavLink to="/purchase-orders" className={linkCls}>
+          <ShoppingCart className="w-4 h-4 flex-shrink-0" />
+          Purchase Orders
         </NavLink>
         <NavLink to="/invoices" className={linkCls}>
           <ClipboardList className="w-4 h-4 flex-shrink-0" />
           Invoices
         </NavLink>
 
-        <p className={section}>Reports</p>
-        <NavLink to="/analytics" className={linkCls}>
-          <BarChart2 className="w-4 h-4 flex-shrink-0" />
-          Analytics
+        <p className={section}>Procurement</p>
+        <NavLink to="/vendors" className={linkCls}>
+          <Package className="w-4 h-4 flex-shrink-0" />
+          Vendors
+        </NavLink>
+        <NavLink to="/add-customer" className={linkCls}>
+          <Building2 className="w-4 h-4 flex-shrink-0" />
+          Customers
         </NavLink>
 
         <p className={section}>System</p>
@@ -183,13 +182,12 @@ export default function App() {
                       <Route path="/requirement/:id/po" element={<POPage />} />
                       <Route path="/requirement/:id/invoice" element={<InvoicePage />} />
                       <Route path="/vendors" element={<VendorCatalogPage />} />
-                      {/* Estimation route removed */}
-                      <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route path="/quotations" element={<QuotationsListPage />} />
                       <Route path="/quotations/new" element={<QuotationEditorPage />} />
                       <Route path="/quotations/:id" element={<QuotationEditorPage />} />
                       <Route path="/invoices" element={<InvoicesListPage />} />
                       <Route path="/invoices/:id" element={<InvoiceEditorPage />} />
+                      <Route path="/purchase-orders" element={<PurchaseOrdersListPage />} />
                       <Route path="/settings/storage" element={<StoragePage />} />
                     </Routes>
                   </AppLayout>

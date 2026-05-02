@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
 import { readData, writeData } from '@/lib/storage'
-import { cquotesApi, customersApi } from '@/api'
+import { cquotesApi, customersApi, logosApi, orgApi } from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type QuotationStatus = 'draft' | 'shared' | 'acknowledged' | 'po_received' | 'invoiced' | 'complete'
@@ -51,6 +51,7 @@ export interface QuotationDoc {
   createdAt: string
   poNumber?: string
   poDate?: string
+  poDueDate?: string
   poAttachment?: string
   invoiceId?: string
   sharedDate?: string
@@ -191,21 +192,31 @@ function calcLine(l: QLine): number {
 }
 
 // ── Logo upload ───────────────────────────────────────────────────
-function LogoUpload({ value, onChange, size = 'md' }: {
+function LogoUpload({ value, onChange, size = 'md', uploadFn }: {
   value: string
-  onChange: (b64: string) => void
+  onChange: (urlOrB64: string) => void
   size?: 'sm' | 'md'
+  uploadFn?: (file: File) => Promise<string>
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const dim = size === 'sm' ? 'w-16 h-12' : 'w-24 h-18'
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => onChange(reader.result as string)
-    reader.readAsDataURL(file)
     e.target.value = ''
+    // Show base64 preview immediately
+    const b64 = await new Promise<string>((res) => {
+      const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(file)
+    })
+    onChange(b64)
+    // Try to upload to storage; replace with URL if successful
+    if (uploadFn) {
+      try {
+        const url = await uploadFn(file)
+        onChange(url)
+      } catch { /* keep base64 */ }
+    }
   }
 
   return (
@@ -383,6 +394,7 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
   const [showPOForm, setShowPOForm] = useState(false)
   const [poInput, setPoInput] = useState('')
   const [poDateInput, setPoDateInput] = useState('')
+  const [poDueDateInput, setPoDueDateInput] = useState('')
   const [poFile, setPoFile] = useState('')
   const poFileRef = useRef<HTMLInputElement>(null)
 
@@ -402,12 +414,14 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
       status: 'po_received',
       poNumber: poInput,
       poDate: poDateInput,
+      poDueDate: poDueDateInput || undefined,
       poAttachment: poFile || undefined,
       poReceivedDate: new Date().toISOString().slice(0, 10),
     })
     setShowPOForm(false)
     setPoInput('')
     setPoDateInput('')
+    setPoDueDateInput('')
     setPoFile('')
   }
 
@@ -516,6 +530,15 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
               />
             </div>
             <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium">Due Date</label>
+              <input
+                type="date"
+                className="input-base text-sm w-36"
+                value={poDueDateInput}
+                onChange={e => setPoDueDateInput(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
               <label className="text-[10px] text-gray-500 font-medium">PO Document</label>
               <input ref={poFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handlePOFile} />
               <button
@@ -539,7 +562,7 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
               <Button variant="primary" onClick={handleSavePO} disabled={!poInput}>
                 Save
               </Button>
-              <Button variant="ghost" onClick={() => { setShowPOForm(false); setPoInput(''); setPoDateInput(''); setPoFile('') }}>
+              <Button variant="ghost" onClick={() => { setShowPOForm(false); setPoInput(''); setPoDateInput(''); setPoDueDateInput(''); setPoFile('') }}>
                 Cancel
               </Button>
             </div>
@@ -548,10 +571,41 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
 
         {doc.status === 'po_received' && (
           <>
-            <span className="text-xs text-gray-600 bg-gray-100 rounded px-2 py-1 font-medium">
-              PO: {doc.poNumber}
-              {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
-            </span>
+            {doc.poAttachment ? (
+              <button
+                onClick={() => {
+                  try {
+                    const dataUrl = doc.poAttachment!
+                    if (dataUrl.startsWith('data:')) {
+                      const [header, b64] = dataUrl.split(',')
+                      const mime = header.match(/:(.*?);/)?.[1] ?? 'application/pdf'
+                      const binary = atob(b64)
+                      const bytes = new Uint8Array(binary.length)
+                      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+                      const blob = new Blob([bytes], { type: mime })
+                      window.open(URL.createObjectURL(blob), '_blank')
+                    } else {
+                      window.open(dataUrl, '_blank')
+                    }
+                  } catch { alert('Unable to open PO attachment.') }
+                }}
+                title="Open PO attachment"
+                className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100
+                  border border-amber-200 rounded px-2 py-1 font-medium underline underline-offset-2
+                  hover:no-underline transition-colors"
+              >
+                <Paperclip className="w-3 h-3" />
+                PO: {doc.poNumber}
+                {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
+                {doc.poDueDate ? ` · Due ${formatDate(doc.poDueDate)}` : ''}
+              </button>
+            ) : (
+              <span className="text-xs text-gray-600 bg-gray-100 rounded px-2 py-1 font-medium">
+                PO: {doc.poNumber}
+                {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
+                {doc.poDueDate ? ` · Due ${formatDate(doc.poDueDate)}` : ''}
+              </span>
+            )}
             <Button variant="primary" onClick={onGenerateInvoice}>
               <FileCheck className="w-3.5 h-3.5" />
               Generate Invoice
@@ -605,13 +659,14 @@ interface PageProps {
   onLineChange: (key: string, field: keyof QLine, val: string) => void
   onAddLine: () => void
   onRemoveLine: (key: string) => void
-  onCustomerLogoChange: (b64: string) => void
+  onCustomerLogoChange: (val: string) => void
+  customerId: string
 }
 
 function QuotationPage({
   doc, lines, pageNum, totalPages, subtotal, vatAmt, grandTotal,
   isLastPage, isFirstPage, onChange, onLineChange, onAddLine, onRemoveLine,
-  onCustomerLogoChange,
+  onCustomerLogoChange, customerId,
 }: PageProps) {
   const set = (f: keyof QuotationDoc) => (v: string) => onChange({ ...doc, [f]: v })
 
@@ -633,6 +688,7 @@ function QuotationPage({
                 onCustomerLogoChange(v)
               }}
               size="md"
+              uploadFn={customerId ? (f) => customersApi.uploadLogo(customerId, f) : undefined}
             />
             <p className="text-[9px] text-gray-400 italic print:hidden">Customer logo</p>
           </div>
@@ -651,13 +707,15 @@ function QuotationPage({
               value={doc.issuerLogoImage}
               onChange={(v) => {
                 onChange({ ...doc, issuerLogoImage: v })
-                // persist to profile
                 try {
                   const p = JSON.parse(readData(PROFILE_KEY) ?? '{}')
                   writeData(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
                 } catch { /* ok */ }
+                // Persist to org settings
+                orgApi.patchSettings({ logo_url: v }).catch(() => {})
               }}
               size="md"
+              uploadFn={logosApi.upload}
             />
             <div className="text-right">
               <F value={doc.issuerName} onChange={set('issuerName')}
@@ -1151,6 +1209,16 @@ export default function QuotationEditorPage() {
   const [apiId, setApiId] = useState<number | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
 
+  // Load org logo URL from server settings (for new quotations)
+  useEffect(() => {
+    if (id) return // editing an existing doc — logo comes from doc_data
+    orgApi.getSettings().then((s: any) => {
+      if (s?.logo_url) {
+        setDoc(prev => ({ ...prev, issuerLogoImage: s.logo_url }))
+      }
+    }).catch(() => { /* no server, keep localStorage logo */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load customers from API (fallback to localStorage)
   useEffect(() => {
     customersApi.list().then(list => {
@@ -1165,7 +1233,7 @@ export default function QuotationEditorPage() {
         website: c.website ?? '',
         notes: c.notes ?? '',
         status: c.status,
-        logoImage: c.logo_image ?? '',
+        logoImage: c.logo_url || c.logo_image || '',
       })))
     }).catch(() => {
       try { setCustomers(JSON.parse(readData(C_KEY) ?? '[]')) } catch { /* ok */ }
@@ -1308,6 +1376,10 @@ export default function QuotationEditorPage() {
       email:     doc.issuerEmail,
       trn:       doc.issuerTRN,
     }))
+    // Persist logo URL to org settings so it loads on next new quotation
+    if (doc.issuerLogoImage) {
+      orgApi.patchSettings({ logo_url: doc.issuerLogoImage }).catch(() => {})
+    }
     setShowSettings(false)
   }
 
@@ -1424,9 +1496,12 @@ export default function QuotationEditorPage() {
               onLineChange={updateLine}
               onAddLine={addLine}
               onRemoveLine={removeLine}
-              onCustomerLogoChange={(b64) => {
+              customerId={doc.customerId}
+              onCustomerLogoChange={(val) => {
                 if (doc.customerId) {
-                  customersApi.update(doc.customerId, { logo_image: b64 }).catch(() => { /* silent */ })
+                  // logo_url already persisted by uploadFn; also update logo_image as fallback
+                  const isUrl = val.startsWith('http')
+                  customersApi.update(doc.customerId, isUrl ? { logo_url: val } : { logo_image: val }).catch(() => {})
                 }
               }}
             />

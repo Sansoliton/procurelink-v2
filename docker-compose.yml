@@ -9,6 +9,7 @@ version: "3.9"
 #   2000  → backend API  (direct access / debugging)
 #   5555  → Celery Flower
 #   8025  → MailHog web UI
+#   9000  → MinIO S3 API
 #   9001  → MinIO console
 #   9090  → Prometheus
 #   3001  → Grafana
@@ -19,12 +20,37 @@ x-api-env: &api-env
   MINIO_ENDPOINT: minio:9000
   MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
   MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+  MINIO_BUCKET: ${MINIO_BUCKET:-procurelink}
+  MINIO_SECURE: "false"
+  # Public URL used to generate download links in PDF/emails.
+  # In production set to your actual domain, e.g. https://files.mycompany.com
+  MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
   SMTP_HOST: mailhog
   SMTP_PORT: 1025
   JWT_SECRET: ${JWT_SECRET:-changeme_in_production_32chars_min}
   ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
 
 services:
+  # ── MinIO bucket initialisation (runs once then exits) ─────────
+  minio-init:
+    image: minio/mc
+    container_name: pl_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - procurelink_net
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin};
+        mc mb --ignore-existing local/${MINIO_BUCKET:-procurelink};
+        mc anonymous set download local/${MINIO_BUCKET:-procurelink}/pdfs;
+        echo 'MinIO bucket ready';
+      "
+    labels:
+      - "com.docker.compose.project=procurelink"
+      - "portainer.description=MinIO bucket initialiser (one-shot)"
+
   # ── Frontend (React SPA served by Nginx) ──────────────────────
   frontend:
     build: ./frontend
@@ -54,7 +80,9 @@ services:
       redis:
         condition: service_started
       minio:
-        condition: service_started
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     command: uvicorn app.main:app --host 0.0.0.0 --port 2000 --workers 2
     networks:
       - procurelink_net
@@ -70,8 +98,14 @@ services:
     environment:
       <<: *api-env
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     command: celery -A app.worker worker --loglevel=info -Q default,emails,pdfs --concurrency=2
     networks:
       - procurelink_net
@@ -159,6 +193,12 @@ services:
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - procurelink_net
     restart: unless-stopped
@@ -216,6 +256,7 @@ networks:
 
 volumes:
   postgres_data:
-
-volumes:
-  postgres_data:
+  redis_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:

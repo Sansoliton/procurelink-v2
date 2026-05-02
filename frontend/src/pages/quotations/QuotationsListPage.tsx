@@ -1,12 +1,30 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react'
+import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign, Paperclip, Download } from 'lucide-react'
 import { Button, Badge, EmptyState } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
 import { cquotesApi } from '@/api'
 import type { CustomerQuotation } from '@/types'
 import type { QuotationStatus } from './QuotationEditorPage'
+
+function openPoAttachment(dataUrl: string) {
+  try {
+    if (dataUrl.startsWith('data:')) {
+      const [header, b64] = dataUrl.split(',')
+      const mime = header.match(/:(.*?);/)?.[1] ?? 'application/pdf'
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: mime })
+      window.open(URL.createObjectURL(blob), '_blank')
+    } else {
+      window.open(dataUrl, '_blank')
+    }
+  } catch {
+    alert('Unable to open PO attachment.')
+  }
+}
 
 const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'purple'> = {
   draft:        'gray',
@@ -170,13 +188,35 @@ export default function QuotationsListPage() {
                   </td>
                   <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                     {(q.doc_data as any)?.poNumber ? (
-                      <span className="text-xs font-mono font-semibold text-amber-700">{(q.doc_data as any).poNumber}</span>
+                      (q.doc_data as any)?.poAttachment ? (
+                        <button
+                          onClick={() => openPoAttachment((q.doc_data as any).poAttachment)}
+                          title="Open PO attachment"
+                          className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber-700
+                            hover:text-amber-900 underline underline-offset-2 hover:no-underline
+                            bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded transition-colors"
+                        >
+                          <Paperclip className="w-3 h-3 flex-shrink-0" />
+                          {(q.doc_data as any).poNumber}
+                        </button>
+                      ) : (
+                        <span className="font-mono text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                          {(q.doc_data as any).poNumber}
+                        </span>
+                      )
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end" onClick={e => e.stopPropagation()}>
+                      {q.pdf_url && (
+                        <a href={q.pdf_url} target="_blank" rel="noreferrer"
+                          title="Download PDF"
+                          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                      )}
                       <button onClick={() => nav(`/quotations/${q.id}`)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                         <Edit2 className="w-3.5 h-3.5" />

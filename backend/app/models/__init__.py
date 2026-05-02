@@ -304,6 +304,7 @@ class PurchaseOrder(Base):
     status = Column(Enum(POStatus), default=POStatus.raised)
     payment_terms = Column(String(100), default="Net 30")
     raised_at = Column(DateTime, default=datetime.utcnow)
+    pdf_url = Column(String, nullable=True)
 
     quotation = relationship("Quotation", back_populates="purchase_order")
     invoice = relationship("Invoice", back_populates="purchase_order", uselist=False)
@@ -370,7 +371,8 @@ class Customer(Base):
     website = Column(String(300), nullable=True)
     city = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
-    logo_image = Column(Text, nullable=True)   # base64 data URL
+    logo_image = Column(Text, nullable=True)   # base64 data URL (legacy)
+    logo_url = Column(String(500), nullable=True)  # MinIO/storage URL
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -389,6 +391,7 @@ class CustomerQuotation(Base):
     status = Column(String(30), default="draft")
     total_amount = Column(Float, default=0.0)
     doc_data = Column(JSON, default=dict)   # full QuotationDoc JSON
+    pdf_url = Column(String, nullable=True)  # MinIO object URL after PDF generation
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -407,6 +410,7 @@ class CustomerInvoice(Base):
     status = Column(String(20), default="pending")
     total_amount = Column(Float, default=0.0)
     doc_data = Column(JSON, default=dict)   # full InvoiceDoc JSON
+    pdf_url = Column(String, nullable=True)  # MinIO object URL after PDF generation
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

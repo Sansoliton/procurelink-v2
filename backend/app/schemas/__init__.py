@@ -227,6 +227,18 @@ class PurchaseOrderOut(BaseModel):
     raised_at: datetime
     class Config: from_attributes = True
 
+class PurchaseOrderDetailOut(BaseModel):
+    id: str
+    reference: str
+    status: str
+    payment_terms: str
+    raised_at: datetime
+    quotation_id: str
+    quotation_ref: str
+    total_amount: float
+    vendor_count: int
+    pdf_url: Optional[str] = None
+
 class InvoiceOut(BaseModel):
     id: str
     reference: str
@@ -279,6 +291,7 @@ class CustomerCreate(BaseModel):
     city: Optional[str] = None
     notes: Optional[str] = None
     logo_image: Optional[str] = None
+    logo_url: Optional[str] = None
     status: str = "active"
 
 class CustomerUpdate(BaseModel):
@@ -291,6 +304,7 @@ class CustomerUpdate(BaseModel):
     city: Optional[str] = None
     notes: Optional[str] = None
     logo_image: Optional[str] = None
+    logo_url: Optional[str] = None
     status: Optional[str] = None
 
 class CustomerOut(BaseModel):
@@ -305,6 +319,7 @@ class CustomerOut(BaseModel):
     city: Optional[str]
     notes: Optional[str]
     logo_image: Optional[str]
+    logo_url: Optional[str] = None
     status: str
     created_at: datetime
     class Config: from_attributes = True
@@ -329,6 +344,7 @@ class CustomerQuotationOut(BaseModel):
     status: str
     total_amount: float
     doc_data: dict
+    pdf_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     class Config: from_attributes = True
@@ -355,6 +371,7 @@ class CustomerInvoiceOut(BaseModel):
     status: str
     total_amount: float
     doc_data: dict
+    pdf_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     class Config: from_attributes = True

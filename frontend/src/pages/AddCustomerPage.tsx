@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Building2, Plus, Pencil, Trash2, Search, X,
-  Phone, Globe, MapPin, Mail, User, Check,
+  Phone, Globe, MapPin, Mail, User, Check, Upload,
 } from 'lucide-react'
 import { Card, CardTitle, Button, Badge, EmptyState } from '@/components/ui'
 import { customersApi } from '@/api'
@@ -30,6 +30,9 @@ export default function AddCustomerPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ ...BLANK })
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const logoInputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [saved, setSaved] = useState(false)
 
@@ -39,12 +42,30 @@ export default function AddCustomerPage() {
   })
 
   const createMut = useMutation({
-    mutationFn: (data: typeof BLANK) => customersApi.create(data),
+    mutationFn: async (data: typeof BLANK) => {
+      const customer = await customersApi.create(data)
+      if (logoFile) {
+        try {
+          const url = await customersApi.uploadLogo(customer.id, logoFile)
+          await customersApi.update(customer.id, { logo_url: url })
+        } catch { /* silent — logo upload is best-effort */ }
+      }
+      return customer
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); finishSave() },
   })
 
   const updateMut = useMutation({
-    mutationFn: (data: typeof BLANK) => customersApi.update(editingId!, data),
+    mutationFn: async (data: typeof BLANK) => {
+      const customer = await customersApi.update(editingId!, data)
+      if (logoFile) {
+        try {
+          const url = await customersApi.uploadLogo(editingId!, logoFile)
+          await customersApi.update(editingId!, { logo_url: url })
+        } catch { /* silent */ }
+      }
+      return customer
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); finishSave() },
   })
 
@@ -55,6 +76,7 @@ export default function AddCustomerPage() {
 
   function finishSave() {
     setSaved(true)
+    setLogoFile(null)
     setTimeout(() => { setShowForm(false); setSaved(false) }, 700)
   }
 
@@ -68,6 +90,8 @@ export default function AddCustomerPage() {
 
   function openAdd() {
     setForm({ ...BLANK })
+    setLogoFile(null)
+    setLogoPreview('')
     setEditingId(null)
     setShowForm(true)
     setSaved(false)
@@ -76,6 +100,8 @@ export default function AddCustomerPage() {
   function openEdit(c: Customer) {
     const { id: _id, org_id: _o, created_at: _ts, ...rest } = c
     setForm(rest as typeof BLANK)
+    setLogoFile(null)
+    setLogoPreview(c.logo_url || c.logo_image || '')
     setEditingId(c.id)
     setShowForm(true)
     setSaved(false)
@@ -97,6 +123,15 @@ export default function AddCustomerPage() {
 
   function setField(key: keyof typeof BLANK, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setLogoFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setLogoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   const active = customers.filter((c) => c.status === 'active').length
@@ -227,6 +262,37 @@ export default function AddCustomerPage() {
             />
           </div>
 
+          {/* Logo upload */}
+          <div className="mb-5">
+            <label className="block text-xs font-medium text-gray-600 mb-2">Customer Logo</label>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-20 h-16 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center
+                  cursor-pointer hover:border-blue-400 transition-colors overflow-hidden bg-gray-50"
+                onClick={() => logoInputRef.current?.click()}
+                title="Click to upload logo"
+              >
+                {logoPreview
+                  ? <img src={logoPreview} alt="logo" className="max-w-full max-h-full object-contain p-1" />
+                  : <Upload className="w-5 h-5 text-gray-400" />
+                }
+              </div>
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile} />
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>PNG, JPG, GIF, WebP — max 2 MB</p>
+                {logoPreview && (
+                  <button
+                    type="button"
+                    onClick={() => { setLogoFile(null); setLogoPreview('') }}
+                    className="text-red-400 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button
@@ -280,9 +346,12 @@ export default function AddCustomerPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                  {/* Avatar */}
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 text-sm font-bold flex items-center justify-center flex-shrink-0 border border-blue-100">
-                    {c.company[0]?.toUpperCase()}
+                  {/* Avatar / Logo */}
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {c.logo_url || c.logo_image
+                      ? <img src={c.logo_url || c.logo_image} alt={c.company} className="w-full h-full object-contain p-0.5" />
+                      : <span className="text-blue-700 text-sm font-bold">{c.company[0]?.toUpperCase()}</span>
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">

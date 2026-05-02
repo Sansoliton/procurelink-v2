@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type {
   TokenResponse, User, Project, ProjectMember, Vendor,
-  Requirement, LineItem, RFQ, Quotation, VendorPO, PurchaseOrder,
+  Requirement, LineItem, RFQ, Quotation, VendorPO, PurchaseOrder, PurchaseOrderDetail,
   Invoice, Notification, AnalyticsOverview,
   Customer, CustomerQuotation, CustomerInvoice,
 } from '@/types'
@@ -120,6 +120,8 @@ export const quotesApi = {
     api.post<Quotation>(`/quotes/${quoteId}/approve`).then((r) => r.data),
   raisePO: (quoteId: string) =>
     api.post<PurchaseOrder>(`/quotes/${quoteId}/po`).then((r) => r.data),
+  getPoForQuote: (quoteId: string) =>
+    api.get<PurchaseOrderDetail>(`/quotes/${quoteId}/po`).then((r) => r.data),
   vendorPos: (quoteId: string) =>
     api.get<VendorPO[]>(`/quotes/${quoteId}/vendor-pos`).then((r) => r.data),
   raiseInvoice: (poId: string) =>
@@ -144,6 +146,11 @@ export const analyticsApi = {
   overview: () => api.get<AnalyticsOverview>('/analytics/overview').then((r) => r.data),
 }
 
+// ── Purchase Orders ──────────────────────────────────────────────
+export const purchaseOrdersApi = {
+  list: () => api.get<PurchaseOrderDetail[]>('/quotes/pos').then((r) => r.data),
+}
+
 // ── Customers ────────────────────────────────────────────────────
 export const customersApi = {
   list: () => api.get<Customer[]>('/customers/').then((r) => r.data),
@@ -153,6 +160,30 @@ export const customersApi = {
   update: (id: string, data: Partial<Customer>) =>
     api.put<Customer>(`/customers/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/customers/${id}`).then((r) => r.data),
+  uploadLogo: (id: string, file: File) => {
+    const fd = new FormData(); fd.append('file', file)
+    return api.post<{ url: string }>(`/customers/${id}/logo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data.url)
+  },
+}
+
+// ── Logo upload (generic — for company/issuer logos) ────────────
+export const logosApi = {
+  upload: (file: File): Promise<string> => {
+    const fd = new FormData(); fd.append('file', file)
+    return api.post<{ url: string }>('/logos/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data.url)
+  },
+}
+
+// ── Org settings ─────────────────────────────────────────────────
+export const orgApi = {
+  getSettings: (): Promise<Record<string, unknown>> =>
+    api.get<Record<string, unknown>>('/org/settings').then((r) => r.data),
+  patchSettings: (data: Record<string, unknown>): Promise<Record<string, unknown>> =>
+    api.patch<Record<string, unknown>>('/org/settings', data).then((r) => r.data),
 }
 
 // ── Customer Quotations (sales-side) ────────────────────────────
@@ -164,9 +195,10 @@ export const cquotesApi = {
   update: (id: string, data: Partial<CustomerQuotation>) =>
     api.put<CustomerQuotation>(`/cquotes/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/cquotes/${id}`).then((r) => r.data),
+  getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cquotes/${id}/pdf`).then((r) => r.data),
 }
 
-// ── Customer Invoices (sales-side) ───────────────────────────────
+// -- Customer Invoices (sales-side) --
 export const cinvoicesApi = {
   list: () => api.get<CustomerInvoice[]>('/cinvoices/').then((r) => r.data),
   get: (id: string) => api.get<CustomerInvoice>(`/cinvoices/${id}`).then((r) => r.data),
@@ -175,6 +207,7 @@ export const cinvoicesApi = {
   update: (id: string, data: Partial<CustomerInvoice>) =>
     api.put<CustomerInvoice>(`/cinvoices/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/cinvoices/${id}`).then((r) => r.data),
+  getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cinvoices/${id}/pdf`).then((r) => r.data),
 }
 
 export default api

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { FileText, Search, Trash2, Edit2 } from 'lucide-react'
+import { FileText, Search, Trash2, Edit2, Download } from 'lucide-react'
 import { Badge, EmptyState } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
 import { cinvoicesApi } from '@/api'
@@ -123,6 +123,13 @@ export default function InvoicesListPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()}>
+                      {inv.pdf_url && (
+                        <a href={inv.pdf_url} target="_blank" rel="noreferrer"
+                          title="Download PDF"
+                          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                      )}
                       <button onClick={() => nav(`/invoices/${inv.id}`)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                         <Edit2 className="w-3.5 h-3.5" />

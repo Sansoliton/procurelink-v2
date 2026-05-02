@@ -23,7 +23,7 @@ from app.schemas import (
     VendorCreate, VendorUpdate, VendorOut,
     RequirementCreate, RequirementOut, LineItemCreate, LineItemOut,
     QuoteSubmitRequest, RFQOut,
-    QuotationOut, VendorPOOut, PurchaseOrderOut, InvoiceOut,
+    QuotationOut, VendorPOOut, PurchaseOrderOut, PurchaseOrderDetailOut, InvoiceOut,
     NotificationOut, UnreadCountOut, AnalyticsOverviewOut,
     CustomerCreate, CustomerUpdate, CustomerOut,
     CustomerQuotationUpsert, CustomerQuotationOut,
@@ -766,6 +766,64 @@ def approve_quotation(
     db.refresh(q)
     return q
 
+@quotes_router.get("/pos", response_model=List[PurchaseOrderDetailOut])
+def list_pos(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all purchase orders for the current org."""
+    pos = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.org_id == current_user.org_id)
+        .order_by(PurchaseOrder.raised_at.desc())
+        .all()
+    )
+    result = []
+    for po in pos:
+        q = db.get(Quotation, po.quotation_id)
+        vendor_pos = db.query(VendorPO).filter(VendorPO.quotation_id == po.quotation_id).all()
+        result.append(PurchaseOrderDetailOut(
+            id=po.id,
+            reference=po.reference,
+            status=po.status.value if hasattr(po.status, 'value') else str(po.status),
+            payment_terms=po.payment_terms,
+            raised_at=po.raised_at,
+            quotation_id=po.quotation_id,
+            quotation_ref=q.reference if q else "—",
+            total_amount=round(sum(vpo.amount for vpo in vendor_pos), 2),
+            vendor_count=len(vendor_pos),
+            pdf_url=po.pdf_url,
+        ))
+    return result
+
+@quotes_router.get("/{quote_id}/po", response_model=PurchaseOrderDetailOut)
+def get_po_for_quote(
+    quote_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the master PO for a specific quotation."""
+    po = db.query(PurchaseOrder).filter(
+        PurchaseOrder.quotation_id == quote_id,
+        PurchaseOrder.org_id == current_user.org_id,
+    ).first()
+    if not po:
+        raise HTTPException(404, "No PO for this quotation")
+    q = db.get(Quotation, po.quotation_id)
+    vendor_pos = db.query(VendorPO).filter(VendorPO.quotation_id == quote_id).all()
+    return PurchaseOrderDetailOut(
+        id=po.id,
+        reference=po.reference,
+        status=po.status.value if hasattr(po.status, 'value') else str(po.status),
+        payment_terms=po.payment_terms,
+        raised_at=po.raised_at,
+        quotation_id=po.quotation_id,
+        quotation_ref=q.reference if q else "—",
+        total_amount=round(sum(vpo.amount for vpo in vendor_pos), 2),
+        vendor_count=len(vendor_pos),
+        pdf_url=po.pdf_url,
+    )
+
 @quotes_router.post("/{quote_id}/po", response_model=PurchaseOrderOut)
 def raise_po(
     quote_id: str,
@@ -834,6 +892,12 @@ def raise_po(
            detail={"reference": po.reference, "vendor_count": len(vendor_groups)})
     db.commit()
     db.refresh(po)
+    # Enqueue PO PDF generation
+    try:
+        from app.worker import generate_pdf_task
+        generate_pdf_task.delay("po", po.id, current_user.org_id)
+    except Exception:
+        pass
     return po
 
 @quotes_router.get("/{quote_id}/vendor-pos", response_model=List[VendorPOOut])
@@ -1130,6 +1194,57 @@ def delete_customer(
     return {"status": "deleted"}
 
 
+@customers_router.post("/{customer_id}/logo")
+async def upload_customer_logo(
+    customer_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a logo for a customer, store in MinIO, persist the URL."""
+    import mimetypes
+    from app.config import settings as cfg
+
+    c = db.query(Customer).filter(
+        Customer.id == customer_id, Customer.org_id == current_user.org_id
+    ).first()
+    if not c:
+        raise HTTPException(404, "Customer not found")
+
+    content = await file.read()
+    fname = file.filename or "logo.png"
+    ext = fname.rsplit(".", 1)[-1].lower()
+    safe_ext = ext if ext in {"png", "jpg", "jpeg", "gif", "webp", "svg"} else "png"
+    object_key = f"logos/customers/{customer_id}.{safe_ext}"
+    content_type = file.content_type or mimetypes.guess_type(fname)[0] or "image/png"
+
+    try:
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"http{'s' if cfg.minio_secure else ''}://{cfg.minio_endpoint}",
+            aws_access_key_id=cfg.minio_access_key,
+            aws_secret_access_key=cfg.minio_secret_key,
+        )
+        try:
+            s3.head_bucket(Bucket=cfg.minio_bucket)
+        except Exception:
+            s3.create_bucket(Bucket=cfg.minio_bucket)
+        s3.put_object(
+            Bucket=cfg.minio_bucket,
+            Key=object_key,
+            Body=content,
+            ContentType=content_type,
+        )
+        url = f"{cfg.minio_public_url.rstrip('/')}/{cfg.minio_bucket}/{object_key}"
+        c.logo_url = url
+        db.commit()
+        return {"url": url}
+    except Exception as exc:
+        log.warning("MinIO customer logo upload failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Storage unavailable")
+
+
 # ── Customer Quotations router (sales-side) ────────────────────────
 
 cquotes_router = APIRouter(prefix="/cquotes", tags=["customer-quotations"])
@@ -1153,7 +1268,34 @@ def create_cquote(
     db.add(cq)
     db.commit()
     db.refresh(cq)
+    # Enqueue PDF generation (fire and forget)
+    try:
+        from app.worker import generate_pdf_task
+        generate_pdf_task.delay("quotation", cq.id, cq.org_id)
+    except Exception:
+        pass
     return cq
+
+@cquotes_router.get("/{cq_id}/pdf")
+def get_cquote_pdf(
+    cq_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Returns the MinIO download URL for the quotation PDF. Triggers generation if not yet available."""
+    cq = db.query(CustomerQuotation).filter(
+        CustomerQuotation.id == cq_id, CustomerQuotation.org_id == current_user.org_id
+    ).first()
+    if not cq:
+        raise HTTPException(404, "Not found")
+    if not cq.pdf_url:
+        try:
+            from app.worker import generate_pdf_task
+            generate_pdf_task.delay("quotation", cq.id, cq.org_id)
+        except Exception:
+            pass
+        raise HTTPException(202, "PDF generation enqueued — please retry in a moment")
+    return {"pdf_url": cq.pdf_url}
 
 @cquotes_router.get("/{cq_id}", response_model=CustomerQuotationOut)
 def get_cquote(
@@ -1185,6 +1327,12 @@ def update_cquote(
     cq.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(cq)
+    # Re-generate PDF with updated content
+    try:
+        from app.worker import generate_pdf_task
+        generate_pdf_task.delay("quotation", cq.id, cq.org_id)
+    except Exception:
+        pass
     return cq
 
 @cquotes_router.delete("/{cq_id}")
@@ -1226,7 +1374,33 @@ def create_cinvoice(
     db.add(ci)
     db.commit()
     db.refresh(ci)
+    try:
+        from app.worker import generate_pdf_task
+        generate_pdf_task.delay("invoice", ci.id, ci.org_id)
+    except Exception:
+        pass
     return ci
+
+@cinvoices_router.get("/{ci_id}/pdf")
+def get_cinvoice_pdf(
+    ci_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Returns the MinIO download URL for the invoice PDF."""
+    ci = db.query(CustomerInvoice).filter(
+        CustomerInvoice.id == ci_id, CustomerInvoice.org_id == current_user.org_id
+    ).first()
+    if not ci:
+        raise HTTPException(404, "Not found")
+    if not ci.pdf_url:
+        try:
+            from app.worker import generate_pdf_task
+            generate_pdf_task.delay("invoice", ci.id, ci.org_id)
+        except Exception:
+            pass
+        raise HTTPException(202, "PDF generation enqueued — please retry in a moment")
+    return {"pdf_url": ci.pdf_url}
 
 @cinvoices_router.get("/{ci_id}", response_model=CustomerInvoiceOut)
 def get_cinvoice(
@@ -1258,6 +1432,11 @@ def update_cinvoice(
     ci.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(ci)
+    try:
+        from app.worker import generate_pdf_task
+        generate_pdf_task.delay("invoice", ci.id, ci.org_id)
+    except Exception:
+        pass
     return ci
 
 @cinvoices_router.delete("/{ci_id}")
@@ -1274,3 +1453,82 @@ def delete_cinvoice(
     db.delete(ci)
     db.commit()
     return {"status": "deleted"}
+
+
+# ── Logo upload router ─────────────────────────────────────────────
+logos_router = APIRouter(prefix="/logos", tags=["logos"])
+
+_ALLOWED_LOGO_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+
+@logos_router.post("/upload")
+async def upload_logo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a logo image to MinIO and return the public URL.
+    Returns 503 if storage is unavailable so the frontend can fall back to base64."""
+    import mimetypes
+    from app.config import settings as cfg
+
+    content = await file.read()
+    fname = file.filename or "logo.png"
+    ext = fname.rsplit(".", 1)[-1].lower()
+    safe_ext = ext if ext in _ALLOWED_LOGO_EXTS else "png"
+    object_key = f"logos/{current_user.org_id}/{uuid.uuid4()}.{safe_ext}"
+    content_type = (
+        file.content_type
+        or mimetypes.guess_type(fname)[0]
+        or "image/png"
+    )
+
+    try:
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"http{'s' if cfg.minio_secure else ''}://{cfg.minio_endpoint}",
+            aws_access_key_id=cfg.minio_access_key,
+            aws_secret_access_key=cfg.minio_secret_key,
+        )
+        try:
+            s3.head_bucket(Bucket=cfg.minio_bucket)
+        except Exception:
+            s3.create_bucket(Bucket=cfg.minio_bucket)
+        s3.put_object(
+            Bucket=cfg.minio_bucket,
+            Key=object_key,
+            Body=content,
+            ContentType=content_type,
+        )
+        url = f"{cfg.minio_public_url.rstrip('/')}/{cfg.minio_bucket}/{object_key}"
+        return {"url": url}
+    except Exception as exc:
+        log.warning("MinIO logo upload failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Storage unavailable")
+
+
+# ── Org settings router ────────────────────────────────────────────
+org_router = APIRouter(prefix="/org", tags=["org"])
+
+@org_router.get("/settings")
+def get_org_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the org-level settings JSON (includes logo_url, profile, etc.)."""
+    org = db.query(Organisation).filter(Organisation.id == current_user.org_id).first()
+    return org.settings or {}
+
+@org_router.patch("/settings")
+def patch_org_settings(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Merge-update the org settings JSON."""
+    org = db.query(Organisation).filter(Organisation.id == current_user.org_id).first()
+    merged = dict(org.settings or {})
+    merged.update(payload)
+    org.settings = merged
+    db.commit()
+    db.refresh(org)
+    return org.settings

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "procurelink"
     minio_secure: bool = False
+    # Public base URL for generated file links (override in production)
+    minio_public_url: str = "http://localhost:9000"
 
     # Email
     smtp_host: str = "localhost"
