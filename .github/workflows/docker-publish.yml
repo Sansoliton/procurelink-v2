@@ -1,114 +1,76 @@
-name: Build & Push Docker Images
+name: Build, Push & Deploy
 
 on:
   push:
     branches:
       - main
       - master
-    tags:
-      - 'v*.*.*'
-  pull_request:
-    branches:
-      - main
-      - master
 
 env:
-  REGISTRY: docker.io
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/procurelink-backend
   FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/procurelink-frontend
 
 jobs:
   build-and-push:
+    name: Build & push to Docker Hub
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Docker Buildx ──────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── Login to Docker Hub ────────────────────────────────────
       - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # ── Derive image tags ──────────────────────────────────────
-      # On a branch push  → :latest  + :<short-sha>
-      # On a version tag  → :v1.2.3  + :1.2.3 + :latest
-      - name: Extract metadata for backend
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.BACKEND_IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract metadata for frontend
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.FRONTEND_IMAGE }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      # ── Build & push backend ───────────────────────────────────
-      - name: Build and push backend image
+      # ── Backend ────────────────────────────────────────────────
+      - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
-      # ── Build & push frontend ──────────────────────────────────
-      - name: Build and push frontend image
+      # ── Frontend ───────────────────────────────────────────────
+      - name: Build and push frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
-      # ── Update Docker Hub description (main branch only) ───────
-      - name: Update Docker Hub description — backend
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.BACKEND_IMAGE }}
-          short-description: ProcureLink v2 – FastAPI backend
-          readme-filepath: ./README.md
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    needs: build-and-push
 
-      - name: Update Docker Hub description — frontend
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.FRONTEND_IMAGE }}
-          short-description: ProcureLink v2 – React + Nginx frontend
-          readme-filepath: ./README.md
+    steps:
+      # Render redeploys the service by hitting its deploy hook URL.
+      # Add each service's deploy hook URL as a repository secret:
+      #   RENDER_DEPLOY_HOOK_BACKEND  →  https://api.render.com/deploy/srv-xxx?key=yyy
+      #   RENDER_DEPLOY_HOOK_FRONTEND →  https://api.render.com/deploy/srv-zzz?key=www
+      #
+      # Get the URL from: Render dashboard → your service → Settings → Deploy Hook
+
+      - name: Trigger Render deploy — backend
+        run: |
+          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}"
+
+      - name: Trigger Render deploy — frontend
+        run: |
+          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}"
