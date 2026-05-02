@@ -1,0 +1,74 @@
+## render.yaml — Render.com infrastructure definition
+##
+## How to deploy:
+##   1. Push this file to your repo root (already here).
+##   2. In Render dashboard → New → Blueprint → connect your repo.
+##   3. Render reads this file and creates all services automatically.
+##
+## Environment variables that must be set manually in the Render dashboard
+## (mark them as "Secret" so they are not exposed in logs):
+##   JWT_SECRET             — random 32+ char string
+##   MINIO_ACCESS_KEY       — if using external MinIO / S3
+##   MINIO_SECRET_KEY       — if using external MinIO / S3
+##   MINIO_ENDPOINT         — e.g. s3.amazonaws.com or your MinIO host
+##   MINIO_PUBLIC_URL       — public base URL for file links
+##   MINIO_BUCKET           — bucket name
+
+databases:
+  - name: procurelink-db
+    databaseName: procurelink
+    user: proc
+    plan: free          # upgrade to starter/standard for production
+    region: singapore   # choose the region closest to your users
+
+services:
+  # ── Backend API ─────────────────────────────────────────────────
+  - type: web
+    name: procurelink-backend
+    runtime: image
+    image:
+      url: docker.io/${DOCKERHUB_USERNAME}/procurelink-backend:latest
+    region: singapore
+    plan: free            # upgrade to starter for always-on
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: procurelink-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false       # set manually in dashboard
+      - key: REDIS_URL
+        value: redis://localhost:6379/0   # replace with Render Redis URL if needed
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_BUCKET
+        value: procurelink
+      - key: MINIO_SECURE
+        value: "true"
+      - key: MINIO_PUBLIC_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://procurelink-frontend.onrender.com
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # ── Frontend (React + Nginx) ─────────────────────────────────────
+  - type: web
+    name: procurelink-frontend
+    runtime: image
+    image:
+      url: docker.io/${DOCKERHUB_USERNAME}/procurelink-frontend:latest
+    region: singapore
+    plan: free
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+    autoDeploy: true

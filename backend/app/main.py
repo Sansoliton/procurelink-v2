@@ -15,8 +15,10 @@ from app.routers import (
     customers_router, cquotes_router, cinvoices_router,
 )
 
-# Create all tables (use alembic in production)
-Base.metadata.create_all(bind=engine)
+# SQLite local dev: auto-create tables without running Alembic.
+# On Postgres (production) start.sh runs `alembic upgrade head` before uvicorn.
+if settings.database_url.startswith("sqlite"):
+    Base.metadata.create_all(bind=engine)
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 

@@ -6,7 +6,12 @@ import type {
   Customer, CustomerQuotation, CustomerInvoice,
 } from '@/types'
 
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({
+  // In production the React build is served separately from the backend.
+  // Set VITE_API_URL=https://procurelink-backend.onrender.com at build time.
+  // Falls back to '/api' for local Docker Compose (Nginx proxies /api/ → backend).
+  baseURL: import.meta.env.VITE_API_URL ?? '/api',
+})
 
 // Attach JWT on every request
 api.interceptors.request.use((config) => {

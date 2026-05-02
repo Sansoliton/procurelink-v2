@@ -50,6 +50,10 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          # VITE_API_URL must be the public Render URL of your backend service.
+          # Set RENDER_BACKEND_URL in GitHub → Settings → Secrets → Actions.
+          build-args: |
+            VITE_API_URL=${{ secrets.RENDER_BACKEND_URL }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
           platforms: linux/amd64
