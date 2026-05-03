@@ -1,14 +1,12 @@
 name: Build & Push
 
 on:
-  push:
-    branches:
-      - main
-      - master
+  workflow_dispatch:
 
 env:
   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/procurelink-backend
   FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/procurelink-frontend
+  VITE_API_URL: ${{ secrets.RENDER_BACKEND_URL }}
 
 jobs:
   build-and-push:
@@ -51,7 +49,7 @@ jobs:
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           build-args: |
-            VITE_API_URL=${{ secrets.RENDER_BACKEND_URL }}
+            VITE_API_URL=${{ env.VITE_API_URL }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
           platforms: linux/amd64
