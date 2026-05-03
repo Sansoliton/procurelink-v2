@@ -1218,6 +1218,14 @@ async def upload_customer_logo(
     object_key = f"logos/customers/{customer_id}.{safe_ext}"
     content_type = file.content_type or mimetypes.guess_type(fname)[0] or "image/png"
 
+    # If MinIO is not configured, fall back to base64 data URL stored in DB
+    if not cfg.minio_endpoint:
+        import base64
+        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
+        c.logo_url = data_url
+        db.commit()
+        return {"url": data_url}
+
     try:
         import boto3
         s3 = boto3.client(
@@ -1242,7 +1250,11 @@ async def upload_customer_logo(
         return {"url": url}
     except Exception as exc:
         log.warning("MinIO customer logo upload failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Storage unavailable")
+        import base64
+        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
+        c.logo_url = data_url
+        db.commit()
+        return {"url": data_url}
 
 
 # ── Customer Quotations router (sales-side) ────────────────────────
@@ -1481,6 +1493,12 @@ async def upload_logo(
         or "image/png"
     )
 
+    # If MinIO is not configured, fall back to base64 data URL
+    if not cfg.minio_endpoint:
+        import base64
+        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
+        return {"url": data_url}
+
     try:
         import boto3
         s3 = boto3.client(
@@ -1503,7 +1521,9 @@ async def upload_logo(
         return {"url": url}
     except Exception as exc:
         log.warning("MinIO logo upload failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Storage unavailable")
+        import base64
+        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
+        return {"url": data_url}
 
 
 # ── Org settings router ────────────────────────────────────────────

@@ -46,6 +46,7 @@ services:
 
   # ── Frontend ──────────────────────────────────────────────────
   frontend:
+    build: ./frontend
     image: ${DOCKERHUB_USERNAME}/procurelink-frontend:latest
     container_name: pl_frontend
     ports:
@@ -56,6 +57,7 @@ services:
 
   # ── Backend API ───────────────────────────────────────────────
   api:
+    build: ./backend
     image: ${DOCKERHUB_USERNAME}/procurelink-backend:latest
     container_name: pl_api
     ports:
@@ -77,6 +79,7 @@ services:
 
   # ── Celery worker ─────────────────────────────────────────────
   worker:
+    build: ./backend
     image: ${DOCKERHUB_USERNAME}/procurelink-backend:latest
     container_name: pl_worker
     environment:
@@ -96,6 +99,7 @@ services:
 
   # ── Celery beat ───────────────────────────────────────────────
   beat:
+    build: ./backend
     image: ${DOCKERHUB_USERNAME}/procurelink-backend:latest
     container_name: pl_beat
     environment:

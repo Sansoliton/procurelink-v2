@@ -39,18 +39,9 @@ services:
         sync: false       # set manually in dashboard
       - key: REDIS_URL
         value: redis://localhost:6379/0   # replace with Render Redis URL if needed
-      - key: MINIO_ENDPOINT
-        sync: false
-      - key: MINIO_ACCESS_KEY
-        sync: false
-      - key: MINIO_SECRET_KEY
-        sync: false
-      - key: MINIO_BUCKET
-        value: procurelink
-      - key: MINIO_SECURE
-        value: "true"
-      - key: MINIO_PUBLIC_URL
-        sync: false
+      # Storage — leave MINIO_ENDPOINT unset to use base64 fallback (no object storage)
+      # To enable S3/MinIO later, set MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY,
+      # MINIO_BUCKET, MINIO_PUBLIC_URL manually in the Render dashboard.
       - key: ALLOWED_ORIGINS
         value: https://procurelink-frontend.onrender.com
       - key: ENVIRONMENT
