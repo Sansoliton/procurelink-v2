@@ -27,7 +27,7 @@ services:
     name: procurelink-backend
     runtime: image
     image:
-      url: docker.io/${DOCKERHUB_USERNAME}/procurelink-backend:latest
+      url: docker.io/santhoshsoliton/procurelink-backend:latest
     region: singapore
     plan: free            # upgrade to starter for always-on
     envVars:
@@ -56,7 +56,7 @@ services:
     name: procurelink-frontend
     runtime: image
     image:
-      url: docker.io/${DOCKERHUB_USERNAME}/procurelink-frontend:latest
+      url: docker.io/santhoshsoliton/procurelink-frontend:latest
     region: singapore
     plan: free
     envVars:
