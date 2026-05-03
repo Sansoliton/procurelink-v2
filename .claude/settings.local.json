@@ -3,8 +3,7 @@
     "allow": [
       "Bash(npx tsc *)",
       "Bash(node -e ' *)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git rm *)"
     ]
   }
 }
