@@ -7,6 +7,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
+import { readData, writeData } from '@/lib/storage'
+import { cquotesApi, customersApi, logosApi, orgApi } from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type QuotationStatus = 'draft' | 'shared' | 'acknowledged' | 'po_received' | 'invoiced' | 'complete'
@@ -49,6 +51,7 @@ export interface QuotationDoc {
   createdAt: string
   poNumber?: string
   poDate?: string
+  poDueDate?: string
   poAttachment?: string
   invoiceId?: string
   sharedDate?: string
@@ -95,7 +98,7 @@ const DEFAULT_PROFILE = {
 // ── Storage helpers ────────────────────────────────────────────────
 function loadAll(): QuotationDoc[] {
   try {
-    const raw = localStorage.getItem(Q_KEY)
+    const raw = readData(Q_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : Object.values(parsed)
@@ -103,7 +106,7 @@ function loadAll(): QuotationDoc[] {
 }
 
 function saveAll(docs: QuotationDoc[]) {
-  localStorage.setItem(Q_KEY, JSON.stringify(docs))
+  writeData(Q_KEY, JSON.stringify(docs))
 }
 
 function nextNo(): string {
@@ -119,7 +122,7 @@ function nextNo(): string {
 }
 
 function loadProfile() {
-  try { return { ...DEFAULT_PROFILE, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') } }
+  try { return { ...DEFAULT_PROFILE, ...JSON.parse(readData(PROFILE_KEY) ?? '{}') } }
   catch { return DEFAULT_PROFILE }
 }
 
@@ -127,7 +130,6 @@ function newLine(): QLine {
   return { _key: crypto.randomUUID(), description: '', qty: '', unitPrice: '', amount: '' }
 }
 
-// ── Pagination: estimate rows a line occupies ─────────────────────
 function estimateRows(line: QLine): number {
   const chars = (line.description || '').length
   if (chars <= 70) return 1
@@ -190,21 +192,31 @@ function calcLine(l: QLine): number {
 }
 
 // ── Logo upload ───────────────────────────────────────────────────
-function LogoUpload({ value, onChange, size = 'md' }: {
+function LogoUpload({ value, onChange, size = 'md', uploadFn }: {
   value: string
-  onChange: (b64: string) => void
+  onChange: (urlOrB64: string) => void
   size?: 'sm' | 'md'
+  uploadFn?: (file: File) => Promise<string>
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const dim = size === 'sm' ? 'w-16 h-12' : 'w-24 h-18'
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => onChange(reader.result as string)
-    reader.readAsDataURL(file)
     e.target.value = ''
+    // Show base64 preview immediately
+    const b64 = await new Promise<string>((res) => {
+      const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(file)
+    })
+    onChange(b64)
+    // Try to upload to storage; replace with URL if successful
+    if (uploadFn) {
+      try {
+        const url = await uploadFn(file)
+        onChange(url)
+      } catch { /* keep base64 */ }
+    }
   }
 
   return (
@@ -382,6 +394,7 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
   const [showPOForm, setShowPOForm] = useState(false)
   const [poInput, setPoInput] = useState('')
   const [poDateInput, setPoDateInput] = useState('')
+  const [poDueDateInput, setPoDueDateInput] = useState('')
   const [poFile, setPoFile] = useState('')
   const poFileRef = useRef<HTMLInputElement>(null)
 
@@ -401,12 +414,14 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
       status: 'po_received',
       poNumber: poInput,
       poDate: poDateInput,
+      poDueDate: poDueDateInput || undefined,
       poAttachment: poFile || undefined,
       poReceivedDate: new Date().toISOString().slice(0, 10),
     })
     setShowPOForm(false)
     setPoInput('')
     setPoDateInput('')
+    setPoDueDateInput('')
     setPoFile('')
   }
 
@@ -515,6 +530,15 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
               />
             </div>
             <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium">Due Date</label>
+              <input
+                type="date"
+                className="input-base text-sm w-36"
+                value={poDueDateInput}
+                onChange={e => setPoDueDateInput(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
               <label className="text-[10px] text-gray-500 font-medium">PO Document</label>
               <input ref={poFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handlePOFile} />
               <button
@@ -538,7 +562,7 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
               <Button variant="primary" onClick={handleSavePO} disabled={!poInput}>
                 Save
               </Button>
-              <Button variant="ghost" onClick={() => { setShowPOForm(false); setPoInput(''); setPoDateInput(''); setPoFile('') }}>
+              <Button variant="ghost" onClick={() => { setShowPOForm(false); setPoInput(''); setPoDateInput(''); setPoDueDateInput(''); setPoFile('') }}>
                 Cancel
               </Button>
             </div>
@@ -547,10 +571,41 @@ function WorkflowStrip({ doc, onUpdate, onGenerateInvoice, nav }: WorkflowStripP
 
         {doc.status === 'po_received' && (
           <>
-            <span className="text-xs text-gray-600 bg-gray-100 rounded px-2 py-1 font-medium">
-              PO: {doc.poNumber}
-              {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
-            </span>
+            {doc.poAttachment ? (
+              <button
+                onClick={() => {
+                  try {
+                    const dataUrl = doc.poAttachment!
+                    if (dataUrl.startsWith('data:')) {
+                      const [header, b64] = dataUrl.split(',')
+                      const mime = header.match(/:(.*?);/)?.[1] ?? 'application/pdf'
+                      const binary = atob(b64)
+                      const bytes = new Uint8Array(binary.length)
+                      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+                      const blob = new Blob([bytes], { type: mime })
+                      window.open(URL.createObjectURL(blob), '_blank')
+                    } else {
+                      window.open(dataUrl, '_blank')
+                    }
+                  } catch { alert('Unable to open PO attachment.') }
+                }}
+                title="Open PO attachment"
+                className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100
+                  border border-amber-200 rounded px-2 py-1 font-medium underline underline-offset-2
+                  hover:no-underline transition-colors"
+              >
+                <Paperclip className="w-3 h-3" />
+                PO: {doc.poNumber}
+                {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
+                {doc.poDueDate ? ` · Due ${formatDate(doc.poDueDate)}` : ''}
+              </button>
+            ) : (
+              <span className="text-xs text-gray-600 bg-gray-100 rounded px-2 py-1 font-medium">
+                PO: {doc.poNumber}
+                {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
+                {doc.poDueDate ? ` · Due ${formatDate(doc.poDueDate)}` : ''}
+              </span>
+            )}
             <Button variant="primary" onClick={onGenerateInvoice}>
               <FileCheck className="w-3.5 h-3.5" />
               Generate Invoice
@@ -604,11 +659,14 @@ interface PageProps {
   onLineChange: (key: string, field: keyof QLine, val: string) => void
   onAddLine: () => void
   onRemoveLine: (key: string) => void
+  onCustomerLogoChange: (val: string) => void
+  customerId: string
 }
 
 function QuotationPage({
   doc, lines, pageNum, totalPages, subtotal, vatAmt, grandTotal,
   isLastPage, isFirstPage, onChange, onLineChange, onAddLine, onRemoveLine,
+  onCustomerLogoChange, customerId,
 }: PageProps) {
   const set = (f: keyof QuotationDoc) => (v: string) => onChange({ ...doc, [f]: v })
 
@@ -625,8 +683,12 @@ function QuotationPage({
           <div className="flex flex-col items-start gap-1">
             <LogoUpload
               value={doc.customerLogoImage}
-              onChange={set('customerLogoImage')}
+              onChange={(v) => {
+                onChange({ ...doc, customerLogoImage: v })
+                onCustomerLogoChange(v)
+              }}
               size="md"
+              uploadFn={customerId ? (f) => customersApi.uploadLogo(customerId, f) : undefined}
             />
             <p className="text-[9px] text-gray-400 italic print:hidden">Customer logo</p>
             <p className="text-[9px] text-gray-400 italic">Japanese High-Quality Products</p>
@@ -645,11 +707,14 @@ function QuotationPage({
               onChange={(v) => {
                 onChange({ ...doc, issuerLogoImage: v })
                 try {
-                  const p = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}')
-                  localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
+                  const p = JSON.parse(readData(PROFILE_KEY) ?? '{}')
+                  writeData(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
                 } catch { /* ok */ }
+                // Persist to org settings
+                orgApi.patchSettings({ logo_url: v }).catch(() => {})
               }}
               size="md"
+              uploadFn={logosApi.upload}
             />
             <div className="text-right">
               <F value={doc.issuerName} onChange={set('issuerName')}
@@ -817,18 +882,26 @@ function QuotationPage({
               </tr>
             </tfoot>
           )}
-        </table>
 
-        {isLastPage && (
-          <button
-            onClick={onAddLine}
-            className="print:hidden flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800
-              border border-dashed border-blue-300 hover:border-blue-500 rounded px-3 py-1.5 transition-colors mb-2"
-          >
-            <Plus className="w-3 h-3" />
-            Add line
-          </button>
-        )}
+          {/* Add line row — inside the table, last page only */}
+          {isLastPage && (
+            <tbody className="print:hidden">
+              <tr>
+                <td
+                  colSpan={6}
+                  className="border border-dashed border-blue-200 py-1.5 px-2 cursor-pointer
+                    hover:bg-blue-50/40 transition-colors group"
+                  onClick={onAddLine}
+                >
+                  <span className="flex items-center gap-1 text-xs text-blue-400 group-hover:text-blue-600">
+                    <Plus className="w-3 h-3" />
+                    Add line
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          )}
+        </table>
       </div>
 
       {/* ── Footer (last page only) ───────────────────────────── */}
@@ -997,7 +1070,7 @@ function generateInvoice(doc: QuotationDoc): string {
   const yy = new Date().getFullYear().toString().slice(-2)
   let existing: { id: string; invoiceNo: string }[] = []
   try {
-    const raw = localStorage.getItem(INV_KEY)
+    const raw = readData(INV_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       existing = Array.isArray(parsed) ? parsed : Object.values(parsed)
@@ -1044,7 +1117,7 @@ function generateInvoice(doc: QuotationDoc): string {
     createdAt: new Date().toISOString(),
   }
 
-  localStorage.setItem(INV_KEY, JSON.stringify([...existing, newInvoice]))
+  writeData(INV_KEY, JSON.stringify([...existing, newInvoice]))
   return newInvoice.id
 }
 
@@ -1132,11 +1205,63 @@ export default function QuotationEditorPage() {
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [saved, setSaved] = useState(!!id)
+  const [apiId, setApiId] = useState<number | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
 
+  // Load org logo URL from server settings (for new quotations)
   useEffect(() => {
-    try { setCustomers(JSON.parse(localStorage.getItem(C_KEY) ?? '[]')) } catch { /* ok */ }
+    if (id) return // editing an existing doc — logo comes from doc_data
+    orgApi.getSettings().then((s: any) => {
+      if (s?.logo_url) {
+        setDoc(prev => ({ ...prev, issuerLogoImage: s.logo_url }))
+      }
+    }).catch(() => { /* no server, keep localStorage logo */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load customers from API (fallback to localStorage)
+  useEffect(() => {
+    customersApi.list().then(list => {
+      setCustomers(list.map((c: any) => ({
+        id: String(c.id),
+        company: c.company,
+        contactName: c.contact_name ?? '',
+        email: c.email ?? '',
+        phone: c.phone ?? '',
+        city: c.city ?? '',
+        industry: c.industry ?? '',
+        website: c.website ?? '',
+        notes: c.notes ?? '',
+        status: c.status,
+        logoImage: c.logo_url || c.logo_image || '',
+      })))
+    }).catch(() => {
+      try { setCustomers(JSON.parse(readData(C_KEY) ?? '[]')) } catch { /* ok */ }
+    })
   }, [])
+
+  // Load quotation from API if editing
+  useEffect(() => {
+    if (!id) return
+    cquotesApi.list().then((list: any[]) => {
+      const found = list.find(q => String(q.id) === id || (q.doc_data as any)?.id === id)
+      if (found) {
+        setApiId(found.id)
+        const d = found.doc_data as QuotationDoc
+        setDoc({
+          ...d,
+          issuerLogoImage: d.issuerLogoImage ?? '',
+          customerLogoImage: d.customerLogoImage ?? '',
+          status: normalizeStatus(d.status),
+          poNumber: d.poNumber ?? '',
+          poDate: d.poDate ?? '',
+          invoiceId: d.invoiceId ?? '',
+          sharedDate: d.sharedDate ?? '',
+          acknowledgedDate: d.acknowledgedDate ?? '',
+          poReceivedDate: d.poReceivedDate ?? '',
+        })
+      }
+    }).catch(() => { /* fall through to localStorage */ })
+  }, [id])
 
   useEffect(() => {
     function outside(e: MouseEvent) {
@@ -1180,9 +1305,27 @@ export default function QuotationEditorPage() {
 
   function handleSave(overrideDoc?: QuotationDoc) {
     const target = overrideDoc ?? doc
+    // localStorage save (keep for offline/print compat)
     const all = loadAll().filter(q => q.id !== target.id)
     saveAll([...all, target])
     setSaved(true)
+    // Backend API save (fire and forget)
+    const subtotalVal = target.lines.reduce((s, l) => s + calcLine(l), 0)
+    const vatVal = subtotalVal * (target.vatPct / 100)
+    const payload = {
+      quotation_no: target.quotationNo,
+      customer_name: target.customerName || undefined,
+      status: target.status,
+      total_amount: subtotalVal + vatVal,
+      doc_data: target as unknown as Record<string, unknown>,
+    }
+    if (apiId) {
+      cquotesApi.update(String(apiId), payload).catch(() => { /* silent */ })
+    } else {
+      cquotesApi.create(payload).then((res: any) => {
+        if (res?.id) setApiId(res.id)
+      }).catch(() => { /* silent */ })
+    }
   }
 
   function handlePrint() {
@@ -1221,7 +1364,7 @@ export default function QuotationEditorPage() {
   }
 
   function saveProfile() {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({
+    writeData(PROFILE_KEY, JSON.stringify({
       name:      doc.issuerName,
       logoText:  doc.issuerLogoText,
       logoImage: doc.issuerLogoImage,
@@ -1232,6 +1375,10 @@ export default function QuotationEditorPage() {
       email:     doc.issuerEmail,
       trn:       doc.issuerTRN,
     }))
+    // Persist logo URL to org settings so it loads on next new quotation
+    if (doc.issuerLogoImage) {
+      orgApi.patchSettings({ logo_url: doc.issuerLogoImage }).catch(() => {})
+    }
     setShowSettings(false)
   }
 
@@ -1348,6 +1495,14 @@ export default function QuotationEditorPage() {
               onLineChange={updateLine}
               onAddLine={addLine}
               onRemoveLine={removeLine}
+              customerId={doc.customerId}
+              onCustomerLogoChange={(val) => {
+                if (doc.customerId) {
+                  // logo_url already persisted by uploadFn; also update logo_image as fallback
+                  const isUrl = val.startsWith('http')
+                  customersApi.update(doc.customerId, isUrl ? { logo_url: val } : { logo_image: val }).catch(() => {})
+                }
+              }}
             />
           ))}
         </div>

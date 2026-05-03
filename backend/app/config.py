@@ -14,12 +14,14 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 1440
     algorithm: str = "HS256"
 
-    # Storage
-    minio_endpoint: str = "localhost:9000"
+    # Storage (optional — leave minio_endpoint empty to disable and use base64 fallback)
+    minio_endpoint: str = ""
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "procurelink"
     minio_secure: bool = False
+    # Public base URL for generated file links (override in production)
+    minio_public_url: str = "http://localhost:9000"
 
     # Email
     smtp_host: str = "localhost"

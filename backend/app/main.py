@@ -12,10 +12,13 @@ from app.routers import (
     auth_router, projects_router, vendors_router,
     requirements_router, rfqs_router, quotes_router,
     notifications_router, analytics_router, health_router,
+    customers_router, cquotes_router, cinvoices_router,
 )
 
-# Create all tables (use alembic in production)
-Base.metadata.create_all(bind=engine)
+# SQLite local dev: auto-create tables without running Alembic.
+# On Postgres (production) start.sh runs `alembic upgrade head` before uvicorn.
+if settings.database_url.startswith("sqlite"):
+    Base.metadata.create_all(bind=engine)
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
@@ -52,6 +55,9 @@ app.include_router(quotes_router)
 app.include_router(notifications_router)
 app.include_router(analytics_router)
 app.include_router(health_router)
+app.include_router(customers_router)
+app.include_router(cquotes_router)
+app.include_router(cinvoices_router)
 
 @app.get("/")
 def root():

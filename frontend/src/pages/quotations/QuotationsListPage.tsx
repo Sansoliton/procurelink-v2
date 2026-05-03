@@ -1,29 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, FileText, Trash2, Edit2, Search, TrendingUp, CheckCircle2, Clock, DollarSign, Paperclip, Download } from 'lucide-react'
 import { Button, Badge, EmptyState } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
+import { cquotesApi } from '@/api'
+import type { CustomerQuotation } from '@/types'
 import type { QuotationStatus } from './QuotationEditorPage'
 
-interface QuotationRow {
-  id: string
-  quotationNo: string
-  date: string
-  customerName: string
-  lines: { qty: string; unitPrice: string; amount: string }[]
-  vatPct: number
-  status: string
-  invoiceId?: string
-  poNumber?: string
-  createdAt: string
-}
-
-function calcTotal(doc: QuotationRow): number {
-  const sub = doc.lines.reduce((s, l) => {
-    const q = parseFloat(l.qty), p = parseFloat(l.unitPrice)
-    return s + ((!isNaN(q) && !isNaN(p)) ? q * p : (parseFloat(l.amount) || 0))
-  }, 0)
-  return sub + sub * (doc.vatPct / 100)
+function openPoAttachment(dataUrl: string) {
+  try {
+    if (dataUrl.startsWith('data:')) {
+      const [header, b64] = dataUrl.split(',')
+      const mime = header.match(/:(.*?);/)?.[1] ?? 'application/pdf'
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: mime })
+      window.open(URL.createObjectURL(blob), '_blank')
+    } else {
+      window.open(dataUrl, '_blank')
+    }
+  } catch {
+    alert('Unable to open PO attachment.')
+  }
 }
 
 const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'purple'> = {
@@ -33,7 +33,6 @@ const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber'
   po_received:  'amber',
   invoiced:     'blue',
   complete:     'green',
-  // legacy
   final:        'blue',
   sent:         'blue',
   approved:     'green',
@@ -51,44 +50,35 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function QuotationsListPage() {
   const nav = useNavigate()
-  const [quotations, setQuotations] = useState<QuotationRow[]>([])
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('pl_quotations')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        const list: QuotationRow[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
-        setQuotations(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
-      }
-    } catch { /* ok */ }
-  }, [])
+  const { data: quotations = [] } = useQuery({
+    queryKey: ['cquotes'],
+    queryFn: cquotesApi.list,
+  })
 
-  function handleDelete(id: string) {
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => cquotesApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cquotes'] }),
+  })
+
+  function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
     if (!confirm('Delete this quotation?')) return
-    try {
-      const raw = localStorage.getItem('pl_quotations')
-      if (!raw) return
-      const list: QuotationRow[] = JSON.parse(raw)
-      const updated = Array.isArray(list)
-        ? list.filter(q => q.id !== id)
-        : Object.values(list as Record<string, QuotationRow>).filter(q => q.id !== id)
-      localStorage.setItem('pl_quotations', JSON.stringify(updated))
-      setQuotations(prev => prev.filter(q => q.id !== id))
-    } catch { /* ok */ }
+    deleteMut.mutate(id)
   }
 
   const filtered = quotations.filter(q =>
-    q.quotationNo?.toLowerCase().includes(search.toLowerCase()) ||
-    q.customerName?.toLowerCase().includes(search.toLowerCase())
+    q.quotation_no?.toLowerCase().includes(search.toLowerCase()) ||
+    (q.customer_name ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalValue = quotations.reduce((s, q) => s + calcTotal(q), 0)
-  const poApproved = quotations.filter(q => q.status === 'po_received' || q.status === 'invoiced' || q.status === 'complete')
-  const poApprovedValue = poApproved.reduce((s, q) => s + calcTotal(q), 0)
-  const inProgress = quotations.filter(q => q.status === 'draft' || q.status === 'shared' || q.status === 'acknowledged' || q.status === 'final')
-  const inProgressValue = inProgress.reduce((s, q) => s + calcTotal(q), 0)
+  const totalValue = quotations.reduce((s, q) => s + (q.total_amount ?? 0), 0)
+  const poApproved = quotations.filter(q => ['po_received', 'invoiced', 'complete'].includes(q.status))
+  const poApprovedValue = poApproved.reduce((s, q) => s + (q.total_amount ?? 0), 0)
+  const inProgress = quotations.filter(q => ['draft', 'shared', 'acknowledged', 'final'].includes(q.status))
+  const inProgressValue = inProgress.reduce((s, q) => s + (q.total_amount ?? 0), 0)
 
   const fmt = (n: number) => n.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -101,7 +91,7 @@ export default function QuotationsListPage() {
             Quotations
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {quotations.length} quotation{quotations.length !== 1 ? 's' : ''} saved locally
+            {quotations.length} quotation{quotations.length !== 1 ? 's' : ''}
           </p>
         </div>
         <Button variant="primary" onClick={() => nav('/quotations/new')}>
@@ -176,6 +166,7 @@ export default function QuotationsListPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount (AED)</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Stage</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">PO</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -184,32 +175,53 @@ export default function QuotationsListPage() {
                 <tr key={q.id}
                   className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => nav(`/quotations/${q.id}`)}>
-                  <td className="px-4 py-3 font-mono font-semibold text-blue-700">{q.quotationNo}</td>
-                  <td className="px-4 py-3 text-gray-800">{q.customerName || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{q.date ? formatDate(q.date) : '—'}</td>
+                  <td className="px-4 py-3 font-mono font-semibold text-blue-700">{q.quotation_no}</td>
+                  <td className="px-4 py-3 text-gray-800">{q.customer_name || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{q.created_at ? formatDate(q.created_at) : '—'}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                    {calcTotal(q).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {(q.total_amount ?? 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <Badge variant={STATUS_VARIANT[q.status] ?? 'gray'}>
                       {STATUS_LABEL[q.status as QuotationStatus] ?? q.status}
                     </Badge>
                   </td>
+                  <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                    {(q.doc_data as any)?.poNumber ? (
+                      (q.doc_data as any)?.poAttachment ? (
+                        <button
+                          onClick={() => openPoAttachment((q.doc_data as any).poAttachment)}
+                          title="Open PO attachment"
+                          className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber-700
+                            hover:text-amber-900 underline underline-offset-2 hover:no-underline
+                            bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded transition-colors"
+                        >
+                          <Paperclip className="w-3 h-3 flex-shrink-0" />
+                          {(q.doc_data as any).poNumber}
+                        </button>
+                      ) : (
+                        <span className="font-mono text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                          {(q.doc_data as any).poNumber}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end" onClick={e => e.stopPropagation()}>
-                      {q.invoiceId && (
-                        <button
-                          onClick={() => nav(`/invoices/${q.invoiceId}`)}
-                          className="text-xs text-blue-600 hover:underline px-2 py-1"
-                        >
-                          Invoice →
-                        </button>
+                      {q.pdf_url && (
+                        <a href={q.pdf_url} target="_blank" rel="noreferrer"
+                          title="Download PDF"
+                          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
                       )}
                       <button onClick={() => nav(`/quotations/${q.id}`)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => handleDelete(q.id)}
+                      <button onClick={(e) => handleDelete(e, q.id)}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

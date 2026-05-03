@@ -1,11 +1,17 @@
 import axios from 'axios'
 import type {
   TokenResponse, User, Project, ProjectMember, Vendor,
-  Requirement, LineItem, RFQ, Quotation, VendorPO, PurchaseOrder,
+  Requirement, LineItem, RFQ, Quotation, VendorPO, PurchaseOrder, PurchaseOrderDetail,
   Invoice, Notification, AnalyticsOverview,
+  Customer, CustomerQuotation, CustomerInvoice,
 } from '@/types'
 
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({
+  // In production the React build is served separately from the backend.
+  // Set VITE_API_URL=https://procurelink-backend.onrender.com at build time.
+  // Falls back to '/api' for local Docker Compose (Nginx proxies /api/ → backend).
+  baseURL: import.meta.env.VITE_API_URL ?? '/api',
+})
 
 // Attach JWT on every request
 api.interceptors.request.use((config) => {
@@ -34,10 +40,17 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<TokenResponse>('/auth/login', { email, password }).then((r) => r.data),
   me: () => api.get<User>('/auth/me').then((r) => r.data),
+  refresh: () => api.post<TokenResponse>('/auth/refresh').then((r) => r.data),
   invite: (email: string, org_role: string) =>
     api.post<{ token: string; expires_at: string }>('/auth/invite', { email, org_role }).then((r) => r.data),
   acceptInvite: (token: string, password: string, full_name?: string) =>
     api.post<TokenResponse>('/auth/accept-invite', { token, password, full_name }).then((r) => r.data),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post('/auth/change-password', { current_password, new_password }).then((r) => r.data),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, new_password: string) =>
+    api.post('/auth/reset-password', { token, new_password }).then((r) => r.data),
 }
 
 // ── Projects ────────────────────────────────────────────────────
@@ -77,6 +90,14 @@ export const requirementsApi = {
     api.put<Requirement>(`/projects/${projectId}/requirements/${id}/items`, items).then((r) => r.data),
   submit: (projectId: string, id: string) =>
     api.post<Requirement>(`/projects/${projectId}/requirements/${id}/submit`).then((r) => r.data),
+  uploadFile: (projectId: string, id: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<{ file_path: string; url: string }>(
+      `/projects/${projectId}/requirements/${id}/upload`, fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    ).then((r) => r.data)
+  },
 }
 
 // ── RFQs ────────────────────────────────────────────────────────
@@ -104,6 +125,8 @@ export const quotesApi = {
     api.post<Quotation>(`/quotes/${quoteId}/approve`).then((r) => r.data),
   raisePO: (quoteId: string) =>
     api.post<PurchaseOrder>(`/quotes/${quoteId}/po`).then((r) => r.data),
+  getPoForQuote: (quoteId: string) =>
+    api.get<PurchaseOrderDetail>(`/quotes/${quoteId}/po`).then((r) => r.data),
   vendorPos: (quoteId: string) =>
     api.get<VendorPO[]>(`/quotes/${quoteId}/vendor-pos`).then((r) => r.data),
   raiseInvoice: (poId: string) =>
@@ -128,4 +151,69 @@ export const analyticsApi = {
   overview: () => api.get<AnalyticsOverview>('/analytics/overview').then((r) => r.data),
 }
 
+// ── Purchase Orders ──────────────────────────────────────────────
+export const purchaseOrdersApi = {
+  list: () => api.get<PurchaseOrderDetail[]>('/quotes/pos').then((r) => r.data),
+}
+
+// ── Customers ────────────────────────────────────────────────────
+export const customersApi = {
+  list: () => api.get<Customer[]>('/customers/').then((r) => r.data),
+  get: (id: string) => api.get<Customer>(`/customers/${id}`).then((r) => r.data),
+  create: (data: Omit<Customer, 'id' | 'org_id' | 'created_at'>) =>
+    api.post<Customer>('/customers/', data).then((r) => r.data),
+  update: (id: string, data: Partial<Customer>) =>
+    api.put<Customer>(`/customers/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/customers/${id}`).then((r) => r.data),
+  uploadLogo: (id: string, file: File) => {
+    const fd = new FormData(); fd.append('file', file)
+    return api.post<{ url: string }>(`/customers/${id}/logo`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data.url)
+  },
+}
+
+// ── Logo upload (generic — for company/issuer logos) ────────────
+export const logosApi = {
+  upload: (file: File): Promise<string> => {
+    const fd = new FormData(); fd.append('file', file)
+    return api.post<{ url: string }>('/logos/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data.url)
+  },
+}
+
+// ── Org settings ─────────────────────────────────────────────────
+export const orgApi = {
+  getSettings: (): Promise<Record<string, unknown>> =>
+    api.get<Record<string, unknown>>('/org/settings').then((r) => r.data),
+  patchSettings: (data: Record<string, unknown>): Promise<Record<string, unknown>> =>
+    api.patch<Record<string, unknown>>('/org/settings', data).then((r) => r.data),
+}
+
+// ── Customer Quotations (sales-side) ────────────────────────────
+export const cquotesApi = {
+  list: () => api.get<CustomerQuotation[]>('/cquotes/').then((r) => r.data),
+  get: (id: string) => api.get<CustomerQuotation>(`/cquotes/${id}`).then((r) => r.data),
+  create: (data: Omit<CustomerQuotation, 'id' | 'org_id' | 'created_at' | 'updated_at'>) =>
+    api.post<CustomerQuotation>('/cquotes/', data).then((r) => r.data),
+  update: (id: string, data: Partial<CustomerQuotation>) =>
+    api.put<CustomerQuotation>(`/cquotes/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/cquotes/${id}`).then((r) => r.data),
+  getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cquotes/${id}/pdf`).then((r) => r.data),
+}
+
+// -- Customer Invoices (sales-side) --
+export const cinvoicesApi = {
+  list: () => api.get<CustomerInvoice[]>('/cinvoices/').then((r) => r.data),
+  get: (id: string) => api.get<CustomerInvoice>(`/cinvoices/${id}`).then((r) => r.data),
+  create: (data: Omit<CustomerInvoice, 'id' | 'org_id' | 'created_at' | 'updated_at'>) =>
+    api.post<CustomerInvoice>('/cinvoices/', data).then((r) => r.data),
+  update: (id: string, data: Partial<CustomerInvoice>) =>
+    api.put<CustomerInvoice>(`/cinvoices/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/cinvoices/${id}`).then((r) => r.data),
+  getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cinvoices/${id}/pdf`).then((r) => r.data),
+}
+
 export default api
+

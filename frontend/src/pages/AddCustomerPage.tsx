@@ -1,34 +1,21 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Building2, Plus, Pencil, Trash2, Search, X,
-  Phone, Globe, MapPin, Mail, User, Check,
+  Phone, Globe, MapPin, Mail, User, Check, Upload,
 } from 'lucide-react'
 import { Card, CardTitle, Button, Badge, EmptyState } from '@/components/ui'
-
-interface Customer {
-  id: string
-  company: string
-  contactName: string
-  email: string
-  phone: string
-  industry: string
-  website: string
-  city: string
-  notes: string
-  status: 'active' | 'inactive'
-  createdAt: string
-}
-
-const STORAGE_KEY = 'pl_customers'
+import { customersApi } from '@/api'
+import type { Customer } from '@/types'
 
 const INDUSTRIES = [
   'Manufacturing', 'Construction', 'Oil & Gas', 'Automotive',
   'Aerospace', 'Chemical', 'Food & Beverage', 'Mining', 'Utilities', 'Other',
 ]
 
-const BLANK: Omit<Customer, 'id' | 'createdAt'> = {
+const BLANK: Omit<Customer, 'id' | 'org_id' | 'created_at'> = {
   company: '',
-  contactName: '',
+  contact_name: '',
   email: '',
   phone: '',
   industry: '',
@@ -38,70 +25,113 @@ const BLANK: Omit<Customer, 'id' | 'createdAt'> = {
   status: 'active',
 }
 
-function loadCustomers(): Customer[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
-}
-
-function persist(list: Customer[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-}
-
 export default function AddCustomerPage() {
-  const [customers, setCustomers] = useState<Customer[]>(loadCustomers)
+  const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ ...BLANK })
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const logoInputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [saved, setSaved] = useState(false)
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: customersApi.list,
+  })
+
+  const createMut = useMutation({
+    mutationFn: async (data: typeof BLANK) => {
+      const customer = await customersApi.create(data)
+      if (logoFile) {
+        try {
+          const url = await customersApi.uploadLogo(customer.id, logoFile)
+          await customersApi.update(customer.id, { logo_url: url })
+        } catch { /* silent — logo upload is best-effort */ }
+      }
+      return customer
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); finishSave() },
+  })
+
+  const updateMut = useMutation({
+    mutationFn: async (data: typeof BLANK) => {
+      const customer = await customersApi.update(editingId!, data)
+      if (logoFile) {
+        try {
+          const url = await customersApi.uploadLogo(editingId!, logoFile)
+          await customersApi.update(editingId!, { logo_url: url })
+        } catch { /* silent */ }
+      }
+      return customer
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); finishSave() },
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => customersApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+  })
+
+  function finishSave() {
+    setSaved(true)
+    setLogoFile(null)
+    setTimeout(() => { setShowForm(false); setSaved(false) }, 700)
+  }
 
   const filtered = customers.filter(
     (c) =>
       search === '' ||
       c.company.toLowerCase().includes(search.toLowerCase()) ||
-      c.contactName.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()),
+      (c.contact_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.email ?? '').toLowerCase().includes(search.toLowerCase()),
   )
 
   function openAdd() {
     setForm({ ...BLANK })
+    setLogoFile(null)
+    setLogoPreview('')
     setEditingId(null)
     setShowForm(true)
     setSaved(false)
   }
 
   function openEdit(c: Customer) {
-    const { id: _id, createdAt: _ts, ...rest } = c
-    setForm(rest)
+    const { id: _id, org_id: _o, created_at: _ts, ...rest } = c
+    setForm(rest as typeof BLANK)
+    setLogoFile(null)
+    setLogoPreview(c.logo_url || c.logo_image || '')
     setEditingId(c.id)
     setShowForm(true)
     setSaved(false)
   }
 
   function handleSave() {
-    if (!form.company.trim() || !form.email.trim()) return
-    let updated: Customer[]
+    if (!form.company.trim()) return
     if (editingId) {
-      updated = customers.map((c) => (c.id === editingId ? { ...c, ...form } : c))
+      updateMut.mutate(form)
     } else {
-      updated = [
-        { ...form, id: crypto.randomUUID(), createdAt: new Date().toISOString() },
-        ...customers,
-      ]
+      createMut.mutate(form)
     }
-    setCustomers(updated)
-    persist(updated)
-    setSaved(true)
-    setTimeout(() => { setShowForm(false); setSaved(false) }, 700)
   }
 
   function handleDelete(id: string) {
-    const updated = customers.filter((c) => c.id !== id)
-    setCustomers(updated)
-    persist(updated)
+    if (!confirm('Delete this customer?')) return
+    deleteMut.mutate(id)
   }
 
   function setField(key: keyof typeof BLANK, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function handleLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setLogoFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setLogoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   const active = customers.filter((c) => c.status === 'active').length
@@ -152,8 +182,8 @@ export default function AddCustomerPage() {
               <input
                 className="input-base"
                 placeholder="e.g. John Smith"
-                value={form.contactName}
-                onChange={(e) => setField('contactName', e.target.value)}
+                value={form.contact_name ?? ''}
+                onChange={(e) => setField('contact_name', e.target.value)}
               />
             </div>
             <div>
@@ -232,6 +262,37 @@ export default function AddCustomerPage() {
             />
           </div>
 
+          {/* Logo upload */}
+          <div className="mb-5">
+            <label className="block text-xs font-medium text-gray-600 mb-2">Customer Logo</label>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-20 h-16 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center
+                  cursor-pointer hover:border-blue-400 transition-colors overflow-hidden bg-gray-50"
+                onClick={() => logoInputRef.current?.click()}
+                title="Click to upload logo"
+              >
+                {logoPreview
+                  ? <img src={logoPreview} alt="logo" className="max-w-full max-h-full object-contain p-1" />
+                  : <Upload className="w-5 h-5 text-gray-400" />
+                }
+              </div>
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile} />
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>PNG, JPG, GIF, WebP — max 2 MB</p>
+                {logoPreview && (
+                  <button
+                    type="button"
+                    onClick={() => { setLogoFile(null); setLogoPreview('') }}
+                    className="text-red-400 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button
@@ -285,9 +346,12 @@ export default function AddCustomerPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                  {/* Avatar */}
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 text-sm font-bold flex items-center justify-center flex-shrink-0 border border-blue-100">
-                    {c.company[0]?.toUpperCase()}
+                  {/* Avatar / Logo */}
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {c.logo_url || c.logo_image
+                      ? <img src={c.logo_url || c.logo_image} alt={c.company} className="w-full h-full object-contain p-0.5" />
+                      : <span className="text-blue-700 text-sm font-bold">{c.company[0]?.toUpperCase()}</span>
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -296,9 +360,9 @@ export default function AddCustomerPage() {
                       {c.industry && <Badge variant="blue">{c.industry}</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
-                      {c.contactName && (
+                      {c.contact_name && (
                         <span className="flex items-center gap-1 text-xs text-gray-500">
-                          <User className="w-3 h-3" />{c.contactName}
+                          <User className="w-3 h-3" />{c.contact_name}
                         </span>
                       )}
                       <span className="flex items-center gap-1 text-xs text-gray-500">

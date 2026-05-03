@@ -5,6 +5,7 @@ import {
   Settings, X, Check, Upload, Bold, Italic, List, CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui'
+import { cinvoicesApi, logosApi, orgApi } from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type InvoiceStatus = 'pending' | 'paid' | 'overdue'
@@ -147,13 +148,25 @@ function toWords(amount: number): string {
 }
 
 // ── Logo upload ───────────────────────────────────────────────────
-function LogoUpload({ value, onChange }: { value: string; onChange: (b64: string) => void }) {
+function LogoUpload({
+  value, onChange, uploadFn,
+}: {
+  value: string
+  onChange: (urlOrB64: string) => void
+  uploadFn?: (file: File) => Promise<string>
+}) {
   const inputRef = useRef<HTMLInputElement>(null)
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => onChange(reader.result as string)
-    reader.readAsDataURL(file); e.target.value = ''
+    e.target.value = ''
+    const b64 = await new Promise<string>((res) => {
+      const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(file)
+    })
+    onChange(b64)
+    if (uploadFn) {
+      try { const url = await uploadFn(file); onChange(url) } catch { /* keep base64 */ }
+    }
   }
   return (
     <div className="flex flex-col items-center gap-1">
@@ -270,7 +283,11 @@ function SettingsPanel({ doc, onChange, onSave, onClose }: {
       <div className="flex items-start gap-5 mb-4">
         <div className="flex flex-col items-center gap-1">
           <p className="text-xs font-medium text-gray-500 mb-1">Company Logo</p>
-          <LogoUpload value={doc.issuerLogoImage} onChange={v => onChange({ ...doc, issuerLogoImage: v })} />
+          <LogoUpload
+            value={doc.issuerLogoImage}
+            onChange={v => onChange({ ...doc, issuerLogoImage: v })}
+            uploadFn={logosApi.upload}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm flex-1">
           {fields.map(([label, field]) => (
@@ -329,7 +346,9 @@ function InvoicePage({
                   const p = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}')
                   localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...p, logoImage: v }))
                 } catch { /* ok */ }
+                orgApi.patchSettings({ logo_url: v }).catch(() => {})
               }}
+              uploadFn={logosApi.upload}
             />
             <div className="text-right">
               <F value={doc.issuerName} onChange={set('issuerName')}
@@ -606,6 +625,37 @@ export default function InvoiceEditorPage() {
 
   const [showSettings, setShowSettings] = useState(false)
   const [saved, setSaved] = useState(!!id)
+  const [apiId, setApiId] = useState<number | null>(null)
+
+  // Load org logo URL from server for new invoices
+  useEffect(() => {
+    if (id) return
+    orgApi.getSettings().then((s: any) => {
+      if (s?.logo_url) setDoc(prev => ({ ...prev, issuerLogoImage: s.logo_url }))
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load from API on mount if editing
+  useEffect(() => {
+    if (!id) return
+    cinvoicesApi.list().then((list: any[]) => {
+      const found = list.find(inv => String(inv.id) === id || (inv.doc_data as any)?.id === id)
+      if (found) {
+        setApiId(found.id)
+        const d = found.doc_data as InvoiceDoc
+        setDoc({
+          ...d,
+          invoiceStatus: d.invoiceStatus ?? 'pending',
+          issuerLogoImage: d.issuerLogoImage ?? '',
+          customerLogoImage: d.customerLogoImage ?? '',
+          quotationNo: d.quotationNo ?? '',
+          poNumber: d.poNumber ?? '',
+          poDate: d.poDate ?? '',
+          dueDate: d.dueDate ?? '',
+        })
+      }
+    }).catch(() => { /* fall through to localStorage */ })
+  }, [id])
 
   const updateDoc = useCallback((d: InvoiceDoc) => { setDoc(d); setSaved(false) }, [])
 
@@ -631,6 +681,24 @@ export default function InvoiceEditorPage() {
   function handleSave() {
     const all = loadAll().filter(i => i.id !== doc.id)
     saveAll([...all, doc]); setSaved(true)
+    // Backend API save
+    const subtotalVal = doc.lines.reduce((s, l) => s + calcLine(l), 0)
+    const vatVal = subtotalVal * (doc.vatPct / 100)
+    const payload = {
+      invoice_no: doc.invoiceNo,
+      quotation_no: doc.quotationNo || undefined,
+      customer_name: doc.customerName || undefined,
+      status: doc.invoiceStatus,
+      total_amount: subtotalVal + vatVal,
+      doc_data: doc as unknown as Record<string, unknown>,
+    }
+    if (apiId) {
+      cinvoicesApi.update(String(apiId), payload).catch(() => { /* silent */ })
+    } else {
+      cinvoicesApi.create(payload).then((res: any) => {
+        if (res?.id) setApiId(res.id)
+      }).catch(() => { /* silent */ })
+    }
   }
 
   function handlePrint() { handleSave(); window.print() }
@@ -641,6 +709,9 @@ export default function InvoiceEditorPage() {
       address: doc.issuerAddress, poBox: doc.issuerPOBox,
       mobile: doc.issuerMobile, fax: doc.issuerFax, email: doc.issuerEmail, trn: doc.issuerTRN,
     }))
+    if (doc.issuerLogoImage) {
+      orgApi.patchSettings({ logo_url: doc.issuerLogoImage }).catch(() => {})
+    }
     setShowSettings(false)
   }
 

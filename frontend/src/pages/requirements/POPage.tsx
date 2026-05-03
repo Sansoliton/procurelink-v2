@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { FileText } from 'lucide-react'
 import { requirementsApi, quotesApi } from '@/api'
 import { useProject } from '@/context/ProjectContext'
 import { Card, CardTitle, Badge, Button, StepBar, StatTile, Timeline, Spinner } from '@/components/ui'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import type { VendorPO } from '@/types'
+import type { VendorPO, PurchaseOrderDetail } from '@/types'
 
 export default function POPage() {
   const { id } = useParams<{ id: string }>()
@@ -26,11 +27,19 @@ export default function POPage() {
     enabled: !!quotationId && req?.status === 'po_raised',
   })
 
+  const { data: masterPo } = useQuery<PurchaseOrderDetail>({
+    queryKey: ['master-po', quotationId],
+    queryFn: () => quotesApi.getPoForQuote(quotationId!),
+    enabled: !!quotationId && req?.status === 'po_raised',
+    retry: false,
+  })
+
   const poMut = useMutation({
     mutationFn: () => quotesApi.raisePO(quotationId!),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['requirement', id] })
       qc.invalidateQueries({ queryKey: ['vendor-pos', quotationId] })
+      qc.invalidateQueries({ queryKey: ['master-po', quotationId] })
     },
   })
 
@@ -48,6 +57,29 @@ export default function POPage() {
         <h1 className="text-lg">{req.title}</h1>
         {posRaised && <Badge variant="green">POs raised</Badge>}
       </div>
+
+      {/* Master PO card */}
+      {masterPo && (
+        <Card className="mb-4 border-blue-200 bg-blue-50/40">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm font-bold text-blue-700">{masterPo.reference}</span>
+                <Badge variant="blue">{masterPo.status}</Badge>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {masterPo.vendor_count} vendor PO{masterPo.vendor_count !== 1 ? 's' : ''}
+                &nbsp;&middot;&nbsp;{masterPo.payment_terms}
+                &nbsp;&middot;&nbsp;Total&nbsp;<strong className="text-gray-800">{formatCurrency(masterPo.total_amount)}</strong>
+                &nbsp;&middot;&nbsp;Raised {formatDate(masterPo.raised_at)}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Quotation summary */}
       {quotation && (
