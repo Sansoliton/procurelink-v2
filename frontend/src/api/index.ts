@@ -201,6 +201,8 @@ export const cquotesApi = {
     api.put<CustomerQuotation>(`/cquotes/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/cquotes/${id}`).then((r) => r.data),
   getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cquotes/${id}/pdf`).then((r) => r.data),
+  getRelated: (id: string) =>
+    api.get<{ invoices: CustomerInvoice[]; pos: unknown[] }>(`/cquotes/${id}/related`).then((r) => r.data),
 }
 
 // -- Customer Invoices (sales-side) --

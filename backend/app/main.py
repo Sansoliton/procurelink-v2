@@ -13,6 +13,7 @@ from app.routers import (
     requirements_router, rfqs_router, quotes_router,
     notifications_router, analytics_router, health_router,
     customers_router, cquotes_router, cinvoices_router,
+    logos_router, org_router,
 )
 
 # SQLite local dev: auto-create tables without running Alembic.
@@ -58,6 +59,8 @@ app.include_router(health_router)
 app.include_router(customers_router)
 app.include_router(cquotes_router)
 app.include_router(cinvoices_router)
+app.include_router(logos_router)
+app.include_router(org_router)
 
 @app.get("/")
 def root():

@@ -1363,6 +1363,47 @@ def delete_cquote(
     return {"status": "deleted"}
 
 
+@cquotes_router.get("/{cq_id}/related")
+def get_cquote_related(
+    cq_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return invoices and purchase orders linked to a customer quotation."""
+    cq = db.query(CustomerQuotation).filter(
+        CustomerQuotation.id == cq_id, CustomerQuotation.org_id == current_user.org_id
+    ).first()
+    if not cq:
+        raise HTTPException(404, "Not found")
+
+    invoices = (
+        db.query(CustomerInvoice)
+        .filter(
+            CustomerInvoice.org_id == current_user.org_id,
+            CustomerInvoice.quotation_no == cq.quotation_no,
+        )
+        .order_by(CustomerInvoice.created_at.desc())
+        .all()
+    )
+
+    return {
+        "invoices": [
+            {
+                "id": inv.id,
+                "invoice_no": inv.invoice_no,
+                "quotation_no": inv.quotation_no,
+                "customer_name": inv.customer_name,
+                "status": inv.status,
+                "total_amount": inv.total_amount,
+                "pdf_url": inv.pdf_url,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            }
+            for inv in invoices
+        ],
+        "pos": [],
+    }
+
+
 # ── Customer Invoices router (sales-side) ──────────────────────────
 
 cinvoices_router = APIRouter(prefix="/cinvoices", tags=["customer-invoices"])

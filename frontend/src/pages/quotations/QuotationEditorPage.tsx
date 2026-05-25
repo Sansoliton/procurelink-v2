@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   Plus, Trash2, Printer, Save, ArrowLeft, ChevronDown,
   Settings, X, Check, Upload, Bold, Italic, List,
-  Send, Eye, FileCheck, CheckCircle2, Paperclip,
+  Send, Eye, FileCheck, CheckCircle2, Paperclip, FileText,
 } from 'lucide-react'
+import type { CustomerInvoice } from '@/types'
 import { Button } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
 import { readData, writeData } from '@/lib/storage'
-import { cquotesApi, customersApi, logosApi, orgApi } from '@/api'
+import { cquotesApi, customersApi, logosApi, orgApi, cinvoicesApi } from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type QuotationStatus = 'draft' | 'shared' | 'acknowledged' | 'po_received' | 'invoiced' | 'complete'
@@ -19,6 +20,14 @@ export interface QLine {
   qty: string
   unitPrice: string
   amount: string
+}
+
+export interface DocAttachment {
+  id: string
+  name: string
+  type: string
+  url: string
+  uploadedAt: string
 }
 
 export interface QuotationDoc {
@@ -53,6 +62,7 @@ export interface QuotationDoc {
   poDate?: string
   poDueDate?: string
   poAttachment?: string
+  attachments?: DocAttachment[]
   invoiceId?: string
   sharedDate?: string
   acknowledgedDate?: string
@@ -1194,6 +1204,7 @@ export default function QuotationEditorPage() {
       createdAt: new Date().toISOString(),
       poNumber: '',
       poDate: '',
+      attachments: [],
       invoiceId: '',
       sharedDate: '',
       acknowledgedDate: '',
@@ -1202,10 +1213,27 @@ export default function QuotationEditorPage() {
   })
 
   const [customers, setCustomers] = useState<StoredCustomer[]>([])
+  const [customerSearch, setCustomerSearch] = useState('')
+  const filteredCustomers = customerSearch.trim()
+    ? customers.filter(c =>
+        c.company.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        c.city.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        c.contactName.toLowerCase().includes(customerSearch.toLowerCase())
+      )
+    : customers
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [saved, setSaved] = useState(!!id)
   const [apiId, setApiId] = useState<number | null>(null)
+  const [relatedDocs, setRelatedDocs] = useState<{ invoices: CustomerInvoice[]; pos: unknown[] } | null>(null)
+  const [relatedOpen, setRelatedOpen] = useState(true)
+  const [relatedTab, setRelatedTab] = useState<'invoices' | 'po' | 'attachments'>('invoices')
+  const [uploadModal, setUploadModal] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadInvoiceNo, setUploadInvoiceNo] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [poUploading, setPoUploading] = useState(false)
+  const [filesUploading, setFilesUploading] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 
   // Load org logo URL from server settings (for new quotations)
@@ -1239,6 +1267,12 @@ export default function QuotationEditorPage() {
     })
   }, [])
 
+  // Fetch documents linked to this quotation
+  useEffect(() => {
+    if (!apiId) return
+    cquotesApi.getRelated(String(apiId)).then(setRelatedDocs).catch(() => {})
+  }, [apiId])
+
   // Load quotation from API if editing
   useEffect(() => {
     if (!id) return
@@ -1254,6 +1288,7 @@ export default function QuotationEditorPage() {
           status: normalizeStatus(d.status),
           poNumber: d.poNumber ?? '',
           poDate: d.poDate ?? '',
+          attachments: d.attachments ?? [],
           invoiceId: d.invoiceId ?? '',
           sharedDate: d.sharedDate ?? '',
           acknowledgedDate: d.acknowledgedDate ?? '',
@@ -1382,8 +1417,93 @@ export default function QuotationEditorPage() {
     setShowSettings(false)
   }
 
+  async function handleUploadInvoice() {
+    if (!uploadFile || !uploadInvoiceNo.trim()) return
+    setUploading(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(uploadFile)
+      })
+      await cinvoicesApi.create({
+        invoice_no: uploadInvoiceNo.trim(),
+        quotation_no: doc.quotationNo,
+        customer_id: doc.customerId || undefined,
+        customer_name: doc.customerName || undefined,
+        status: 'pending',
+        total_amount: 0,
+        doc_data: { uploaded: true, filename: uploadFile.name },
+        pdf_url: dataUrl,
+      })
+      if (apiId) {
+        const related = await cquotesApi.getRelated(String(apiId))
+        setRelatedDocs(related)
+      }
+      setUploadModal(false)
+      setUploadFile(null)
+      setUploadInvoiceNo('')
+      setRelatedTab('invoices')
+    } catch { /* silent */ }
+    finally { setUploading(false) }
+  }
+
+  async function handlePOUpload(file: File) {
+    setPoUploading(true)
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const next = { ...doc, poAttachment: dataUrl }
+      setDoc(next)
+      setSaved(false)
+      handleSave(next)
+    } catch { /* silent */ }
+    finally { setPoUploading(false) }
+  }
+
+  function removePOAttachment() {
+    const next = { ...doc, poAttachment: undefined }
+    setDoc(next)
+    setSaved(false)
+    handleSave(next)
+  }
+
+  async function handleFilesUpload(files: FileList) {
+    setFilesUploading(true)
+    try {
+      const added: DocAttachment[] = []
+      for (const file of Array.from(files)) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        added.push({ id: crypto.randomUUID(), name: file.name, type: file.type, url: dataUrl, uploadedAt: new Date().toISOString() })
+      }
+      const next = { ...doc, attachments: [...(doc.attachments ?? []), ...added] }
+      setDoc(next)
+      setSaved(false)
+      handleSave(next)
+    } catch { /* silent */ }
+    finally { setFilesUploading(false) }
+  }
+
+  function removeAttachment(attachId: string) {
+    const next = { ...doc, attachments: (doc.attachments ?? []).filter(a => a.id !== attachId) }
+    setDoc(next)
+    setSaved(false)
+    handleSave(next)
+  }
+
   return (
-    <div>
+    <div className="flex items-start">
+      <div className="flex-1 min-w-0">
       {/* ── Toolbar ── */}
       <div className="no-print flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -1412,15 +1532,26 @@ export default function QuotationEditorPage() {
               <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showCustomerPicker ? 'rotate-180' : ''}`} />
             </button>
             {showCustomerPicker && (
-              <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+              <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                <div className="p-2 border-b border-gray-100">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Search customers…"
+                    className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                  />
+                </div>
                 <div className="p-1 max-h-56 overflow-y-auto">
-                  {customers.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-gray-400">No customers yet.</p>
+                  {filteredCustomers.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-gray-400">{customers.length === 0 ? 'No customers yet.' : 'No matches.'}</p>
                   )}
-                  {customers.map(c => (
+                  {filteredCustomers.map(c => (
                     <button
                       key={c.id}
-                      onClick={() => selectCustomer(c)}
+                      onClick={() => { selectCustomer(c); setCustomerSearch('') }}
                       className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 text-gray-700 flex items-center gap-2"
                     >
                       {c.logoImage && (
@@ -1506,6 +1637,243 @@ export default function QuotationEditorPage() {
             />
           ))}
         </div>
+      </div>
+      </div>{/* end main content */}
+
+      {/* ── Right sidebar ── */}
+      <div
+        className={`print:hidden sticky top-0 self-start flex-shrink-0 border-l border-gray-200 bg-white transition-all duration-300 overflow-hidden ${
+          relatedOpen ? 'w-80' : 'w-10'
+        }`}
+        style={{ height: '100vh', overflowY: 'auto' }}
+      >
+        {/* Header / toggle */}
+        <button
+          onClick={() => setRelatedOpen(v => !v)}
+          className="w-full flex items-center justify-between px-2 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 gap-2"
+          title={relatedOpen ? 'Collapse' : 'Related Documents'}
+        >
+          {relatedOpen ? (
+            <>
+              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 whitespace-nowrap">
+                <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                Related Docs
+                {relatedDocs && relatedDocs.invoices.length > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                    {relatedDocs.invoices.length}
+                  </span>
+                )}
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-400 -rotate-90 flex-shrink-0" />
+            </>
+          ) : (
+            <div className="w-full flex flex-col items-center gap-1">
+              <Paperclip className="w-4 h-4 text-gray-400" />
+              {relatedDocs && relatedDocs.invoices.length > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                  {relatedDocs.invoices.length}
+                </span>
+              )}
+            </div>
+          )}
+        </button>
+
+        {relatedOpen && (
+          <>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100">
+              {(['invoices', 'po', 'attachments'] as const).map(tab => (
+                <button
+                  key={tab}
+                  className={`flex-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                    relatedTab === tab
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                  onClick={() => setRelatedTab(tab)}
+                >
+                  {tab === 'invoices'
+                    ? `Invoices${relatedDocs && relatedDocs.invoices.length ? ` (${relatedDocs.invoices.length})` : ''}`
+                    : tab === 'po' ? 'PO' : 'Files'}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="p-3 space-y-2">
+              {relatedTab === 'invoices' && (
+                <>
+                  {/* Upload button */}
+                  <button
+                    onClick={() => setUploadModal(v => !v)}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-blue-300 text-blue-600 rounded-lg py-2 hover:bg-blue-50 transition-colors"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Upload Invoice
+                  </button>
+
+                  {/* Upload form */}
+                  {uploadModal && (
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                      <p className="text-xs font-semibold text-gray-600">Attach Invoice</p>
+                      <input
+                        type="text"
+                        placeholder="Invoice No. (e.g. INV26/0001)"
+                        value={uploadInvoiceNo}
+                        onChange={e => setUploadInvoiceNo(e.target.value)}
+                        className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+                      />
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-1.5 bg-white hover:bg-gray-50 transition-colors">
+                        <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{uploadFile ? uploadFile.name : 'Choose PDF / Image'}</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          className="hidden"
+                          onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleUploadInvoice}
+                          disabled={uploading || !uploadFile || !uploadInvoiceNo.trim()}
+                          className="flex-1 text-xs bg-blue-600 text-white rounded-md py-1.5 disabled:opacity-50 hover:bg-blue-700 transition-colors"
+                        >
+                          {uploading ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setUploadModal(false); setUploadFile(null); setUploadInvoiceNo('') }}
+                          className="flex-1 text-xs border border-gray-200 rounded-md py-1.5 hover:bg-gray-100 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Invoice list */}
+                  {!apiId ? (
+                    <p className="text-xs text-gray-400 text-center py-4">Save the quotation to view linked invoices.</p>
+                  ) : !relatedDocs ? (
+                    <p className="text-xs text-gray-400 text-center py-4">Loading…</p>
+                  ) : relatedDocs.invoices.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-4">No invoices yet.</p>
+                  ) : (
+                    relatedDocs.invoices.map((inv: CustomerInvoice) => (
+                      <div key={inv.id} className="border border-gray-100 rounded-lg p-2.5 bg-white hover:border-blue-200 transition-colors">
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-gray-800 truncate">{inv.invoice_no}</span>
+                          </div>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                            inv.status === 'paid' ? 'bg-green-100 text-green-700'
+                            : inv.status === 'overdue' ? 'bg-red-100 text-red-700'
+                            : 'bg-amber-100 text-amber-700'
+                          }`}>{inv.status}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{inv.customer_name ?? doc.customerName}</p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-xs font-semibold text-gray-700">
+                            AED {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                          <button onClick={() => nav(`/invoices/${inv.id}`)} className="text-xs text-blue-600 hover:underline">
+                            Open →
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+
+              {relatedTab === 'po' && (
+                <div className="space-y-2">
+                  {doc.poNumber && (
+                    <div className="border border-gray-100 rounded-lg p-3 bg-white space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FileCheck className="w-4 h-4 text-orange-500" />
+                        <span className="text-xs font-semibold text-gray-700">Purchase Order</span>
+                        <span className="ml-auto text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">Received</span>
+                      </div>
+                      <p className="text-xs font-medium text-gray-800">PO No: {doc.poNumber}</p>
+                      {doc.poDate && <p className="text-xs text-gray-400">Date: {doc.poDate}</p>}
+                    </div>
+                  )}
+
+                  {doc.poAttachment ? (
+                    <div className="border border-gray-100 rounded-lg p-2.5 bg-white">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <FileText className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                          <span className="text-xs text-gray-700 truncate">PO Document</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <a href={doc.poAttachment} download="PO_Document" className="text-xs text-blue-600 hover:underline">↓ Download</a>
+                          <button onClick={removePOAttachment} className="text-gray-400 hover:text-red-500 transition-colors" title="Remove">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className={`w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-orange-300 text-orange-600 rounded-lg py-2 hover:bg-orange-50 transition-colors cursor-pointer ${poUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <Upload className="w-3.5 h-3.5" />
+                      {poUploading ? 'Uploading…' : 'Upload PO Document'}
+                      <input type="file" accept=".pdf,image/*" className="hidden" disabled={poUploading} onChange={e => { if (e.target.files?.[0]) handlePOUpload(e.target.files[0]) }} />
+                    </label>
+                  )}
+
+                  {!doc.poNumber && !doc.poAttachment && (
+                    <p className="text-xs text-gray-400 text-center py-2">
+                      No PO received yet.<br />
+                      Advance to &ldquo;PO Received&rdquo; status to attach a PO number.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {relatedTab === 'attachments' && (
+                <div className="space-y-2">
+                  <label className={`w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-gray-300 text-gray-600 rounded-lg py-2 hover:bg-gray-50 transition-colors cursor-pointer ${filesUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="w-3.5 h-3.5" />
+                    {filesUploading ? 'Uploading…' : 'Upload Files'}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,image/*"
+                      multiple
+                      className="hidden"
+                      disabled={filesUploading}
+                      onChange={e => { if (e.target.files?.length) handleFilesUpload(e.target.files) }}
+                    />
+                  </label>
+
+                  {(doc.attachments ?? []).length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-4">No files attached yet.</p>
+                  ) : (
+                    (doc.attachments ?? []).map(att => (
+                      <div key={att.id} className="border border-gray-100 rounded-lg p-2.5 bg-white hover:border-gray-200 transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="text-xs text-gray-700 truncate">{att.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <a href={att.url} download={att.name} className="text-xs text-blue-600 hover:underline">↓</a>
+                            <button onClick={() => removeAttachment(att.id)} className="text-gray-400 hover:text-red-500 transition-colors" title="Remove">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">{new Date(att.uploadedAt).toLocaleDateString()}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

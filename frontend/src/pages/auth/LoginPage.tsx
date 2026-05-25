@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,8 +16,12 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, user } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (user) navigate('/', { replace: true })
+  }, [user, navigate])
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -24,10 +29,7 @@ export default function LoginPage() {
 
   const mutation = useMutation({
     mutationFn: ({ email, password }: FormValues) => authApi.login(email, password),
-    onSuccess: async (data) => {
-      await login(data.access_token)
-      navigate('/')
-    },
+    onSuccess: (data) => { login(data.access_token) },
   })
 
   return (

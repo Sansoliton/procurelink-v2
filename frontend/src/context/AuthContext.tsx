@@ -19,11 +19,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (token) {
+      setIsLoading(true)
       authApi.me()
         .then(setUser)
         .catch(() => { setToken(null); localStorage.removeItem('pl_token') })
         .finally(() => setIsLoading(false))
     } else {
+      setUser(null)
       setIsLoading(false)
     }
   }, [token])
