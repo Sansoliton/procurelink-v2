@@ -6,10 +6,10 @@ import { formatDate, formatCurrency } from '@/lib/utils'
 import { Badge, Spinner } from '@/components/ui'
 import type { PurchaseOrderDetail } from '@/types'
 
-const statusVariant = (status: string): 'blue' | 'green' | 'orange' | 'gray' => {
+const statusVariant = (status: string): 'blue' | 'green' | 'amber' | 'gray' => {
   if (status === 'raised') return 'blue'
   if (status === 'delivered') return 'green'
-  if (status === 'partial') return 'orange'
+  if (status === 'partial') return 'amber'
   return 'gray'
 }
 

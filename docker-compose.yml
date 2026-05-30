@@ -56,7 +56,7 @@ services:
     build: ./frontend
     container_name: pl_frontend
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       - api
     networks:
@@ -151,8 +151,6 @@ services:
   db:
     image: postgres:16-alpine
     container_name: pl_db
-    ports:
-      - "${DB_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${DB_NAME:-procurelink}
       POSTGRES_USER: ${DB_USER:-proc}
@@ -235,7 +233,7 @@ services:
     image: grafana/grafana:latest
     container_name: pl_grafana
     ports:
-      - "${GRAFANA_PORT:-3001}:3000"
+      - "${GRAFANA_PORT:-3002}:3000"
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin

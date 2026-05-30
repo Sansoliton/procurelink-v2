@@ -297,7 +297,7 @@ export default function AddCustomerPage() {
             <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button
               variant="primary"
-              disabled={!form.company.trim() || !form.email.trim()}
+              disabled={!form.company.trim() || !form.email?.trim()}
               onClick={handleSave}
             >
               {saved
