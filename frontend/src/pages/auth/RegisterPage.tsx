@@ -39,7 +39,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">
-            Procure<span className="text-blue-600">Link</span>
+            Quote<span className="text-blue-600">Me</span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">Create your organisation account</p>
         </div>

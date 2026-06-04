@@ -1,0 +1,92 @@
+version: "3.9"
+
+# ProcureLink v2 — Portainer stack with Nginx Proxy Manager
+#
+# Required environment variables (set in Portainer → Stack → Environment):
+#   SECRET_KEY   — JWT secret, minimum 32 characters
+#   DB_PASSWORD  — PostgreSQL password
+#
+# Optional:
+#   APP_URL      — public URL, e.g. https://app.mycompany.com (default: http://localhost)
+#   DB_USER      — PostgreSQL username (default: proc)
+#   DB_NAME      — PostgreSQL database name (default: procurelink)
+#
+# After first deploy:
+#   1. Open http://<your-server>:81  (Nginx Proxy Manager UI)
+#   2. Login: admin@example.com / changeme  (change immediately!)
+#   3. Add a Proxy Host — see README below.
+
+services:
+
+  # ── Nginx Proxy Manager ───────────────────────────────────────
+  # Web UI: http://<server>:81
+  # Default login: admin@example.com / changeme
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: pl_npm
+    ports:
+      - "80:80"      # HTTP traffic
+      - "443:443"    # HTTPS traffic
+      - "81:81"      # NPM admin UI
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+  # ── React SPA (internal) ──────────────────────────────────────
+  frontend:
+    image: registry.sanvx.online/procurelink-frontend:latest
+    container_name: pl_frontend
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+  # ── FastAPI backend (internal) ────────────────────────────────
+  api:
+    image: registry.sanvx.online/procurelink-backend:latest
+    container_name: pl_api
+    environment:
+      DATABASE_URL:  postgresql://${DB_USER:-proc}:${DB_PASSWORD}@db:5432/${DB_NAME:-procurelink}
+      SECRET_KEY:    ${SECRET_KEY}
+      ALLOWED_ORIGINS: ${APP_URL:-http://localhost}
+      FRONTEND_URL:  ${APP_URL:-http://localhost}
+      ENVIRONMENT:   production
+      DEBUG:         "false"
+      MINIO_ENDPOINT: ""
+    command: uvicorn app.main:app --host 0.0.0.0 --port 2000 --workers 2
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+  # ── PostgreSQL ────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: pl_db
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-procurelink}
+      POSTGRES_USER:     ${DB_USER:-proc}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-proc} -d ${DB_NAME:-procurelink}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+networks:
+  procurelink_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  npm_data:
+  npm_letsencrypt:

@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ShoppingCart, ExternalLink, Download } from 'lucide-react'
 import { purchaseOrdersApi } from '@/api'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { Badge, Spinner } from '@/components/ui'
+import PDFViewerModal from '@/components/PDFViewerModal'
 import type { PurchaseOrderDetail } from '@/types'
 
 const statusVariant = (status: string): 'blue' | 'green' | 'amber' | 'gray' => {
@@ -15,6 +17,7 @@ const statusVariant = (status: string): 'blue' | 'green' | 'amber' | 'gray' => {
 
 export default function PurchaseOrdersListPage() {
   const navigate = useNavigate()
+  const [viewer, setViewer] = useState<{ title: string; url: string } | null>(null)
   const { data: pos = [], isLoading } = useQuery<PurchaseOrderDetail[]>({
     queryKey: ['purchase-orders'],
     queryFn: purchaseOrdersApi.list,
@@ -40,7 +43,10 @@ export default function PurchaseOrdersListPage() {
             <tr className="border-b border-gray-100 bg-gray-50/80">
               <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">PO Reference</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Quotation</th>
-              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Total</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">PO Total</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Quotation Value</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Amount Invoiced</th>
+              <th className="text-right px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Remaining</th>
               <th className="text-center px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Vendors</th>
               <th className="text-center px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Status</th>
               <th className="text-left px-5 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Payment Terms</th>
@@ -51,7 +57,7 @@ export default function PurchaseOrdersListPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="text-center py-16">
+                <td colSpan={11} className="text-center py-16">
                   <Spinner size="md" />
                 </td>
               </tr>
@@ -59,7 +65,7 @@ export default function PurchaseOrdersListPage() {
 
             {!isLoading && pos.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-gray-400 text-sm">
+                <td colSpan={11} className="text-center py-16 text-gray-400 text-sm">
                   No purchase orders yet. Raise a PO from a requirement's quotation step.
                 </td>
               </tr>
@@ -87,6 +93,21 @@ export default function PurchaseOrdersListPage() {
                   {formatCurrency(po.total_amount)}
                 </td>
 
+                {/* Quotation value */}
+                <td className="px-5 py-3 text-right font-semibold text-gray-900">
+                  {formatCurrency(po.quotation_amount)}
+                </td>
+
+                {/* Amount invoiced */}
+                <td className="px-5 py-3 text-right text-gray-800">
+                  {formatCurrency(po.invoiced_amount)}
+                </td>
+
+                {/* Remaining to invoice */}
+                <td className="px-5 py-3 text-right font-semibold text-amber-700">
+                  {formatCurrency(po.remaining_to_invoice)}
+                </td>
+
                 {/* Vendor count */}
                 <td className="px-5 py-3 text-center">
                   <span className="text-gray-600 text-xs font-medium">{po.vendor_count}</span>
@@ -107,13 +128,16 @@ export default function PurchaseOrdersListPage() {
                 <td className="px-5 py-3 text-right">
                   <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                     {po.pdf_url && (
-                      <a href={po.pdf_url} target="_blank" rel="noreferrer"
-                        title="Download PO PDF"
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          setViewer({ title: `PO ${po.reference}`, url: po.pdf_url! })
+                        }}
+                        title="View PO PDF"
                         className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        onClick={e => e.stopPropagation()}
                       >
                         <Download className="w-3.5 h-3.5" />
-                      </a>
+                      </button>
                     )}
                     <button
                       onClick={() => navigate(`/requirement-po/${po.quotation_id}`)}
@@ -129,6 +153,14 @@ export default function PurchaseOrdersListPage() {
           </tbody>
         </table>
       </div>
+
+      {viewer && (
+        <PDFViewerModal
+          title={viewer.title}
+          url={viewer.url}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </div>
   )
 }

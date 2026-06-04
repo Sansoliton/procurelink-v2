@@ -7,6 +7,7 @@ import { useMutation } from '@tanstack/react-query'
 import { authApi } from '@/api'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui'
+import quoteMeLogo from '@/assets/images/quoteme-logo.svg'
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
@@ -25,6 +26,7 @@ export default function LoginPage() {
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: { email: 'admin@demo.com', password: 'password123' },
   })
 
   const mutation = useMutation({
@@ -36,9 +38,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Procure<span className="text-blue-600">Link</span>
-          </h1>
+          <img src={quoteMeLogo} alt="QuoteMe" className="h-14 w-auto mx-auto" />
           <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
         </div>
 
@@ -89,7 +89,7 @@ export default function LoginPage() {
 
         <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
           <strong>Demo credentials</strong><br />
-          admin@acme.com / password123
+          admin@demo.com / password123
         </div>
       </div>
     </div>

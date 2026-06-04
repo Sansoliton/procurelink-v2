@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FileText, Search, Trash2, Edit2, Download } from 'lucide-react'
 import { Badge, EmptyState } from '@/components/ui'
+import PDFViewerModal from '@/components/PDFViewerModal'
 import { formatDate } from '@/lib/utils'
 import { cinvoicesApi } from '@/api'
 import type { CustomerInvoice } from '@/types'
@@ -18,6 +19,7 @@ export default function InvoicesListPage() {
   const nav = useNavigate()
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
+  const [viewer, setViewer] = useState<{ title: string; url: string } | null>(null)
 
   const { data: invoices = [] } = useQuery({
     queryKey: ['cinvoices'],
@@ -124,11 +126,12 @@ export default function InvoicesListPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()}>
                       {inv.pdf_url && (
-                        <a href={inv.pdf_url} target="_blank" rel="noreferrer"
-                          title="Download PDF"
+                        <button
+                          onClick={() => setViewer({ title: `Invoice ${inv.invoice_no}`, url: inv.pdf_url! })}
+                          title="View PDF"
                           className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
                           <Download className="w-3.5 h-3.5" />
-                        </a>
+                        </button>
                       )}
                       <button onClick={() => nav(`/invoices/${inv.id}`)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
@@ -151,6 +154,14 @@ export default function InvoicesListPage() {
         <div className="text-center py-12 text-gray-400 text-sm">
           No invoices match "<span className="font-medium">{search}</span>"
         </div>
+      )}
+
+      {viewer && (
+        <PDFViewerModal
+          title={viewer.title}
+          url={viewer.url}
+          onClose={() => setViewer(null)}
+        />
       )}
     </div>
   )

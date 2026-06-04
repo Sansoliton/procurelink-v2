@@ -701,7 +701,15 @@ export default function InvoiceEditorPage() {
     }
   }
 
-  function handlePrint() { handleSave(); window.print() }
+  function handlePrint() {
+    handleSave()
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        window.focus()
+        window.print()
+      }, 50)
+    })
+  }
 
   function saveProfile() {
     localStorage.setItem(PROFILE_KEY, JSON.stringify({

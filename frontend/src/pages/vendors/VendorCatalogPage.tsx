@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit2, X, ChevronDown, ChevronRight, Trash2, Package } from 'lucide-react'
 import { vendorsApi } from '@/api'
-import { Button, Badge, Spinner, EmptyState, Card } from '@/components/ui'
+import { Button, Spinner, EmptyState, Card } from '@/components/ui'
 import { formatCurrency } from '@/lib/utils'
 import type { Vendor, VendorCatalogItem } from '@/types'
 
@@ -24,20 +24,23 @@ export default function VendorCatalogPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<VendorForm>(emptyForm())
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState('')
 
   const { data: vendors = [], isLoading } = useQuery({ queryKey: ['vendors'], queryFn: vendorsApi.list })
 
   const createMut = useMutation({
-    mutationFn: () => vendorsApi.create(form as any),
+    mutationFn: (data: VendorForm) => vendorsApi.create(data as any),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['vendors'] }); resetForm() },
+    onError: (err: any) => setSaveError(err?.response?.data?.detail ?? 'Failed to save vendor. Please try again.'),
   })
 
   const updateMut = useMutation({
-    mutationFn: () => vendorsApi.update(editId!, form as any),
+    mutationFn: (data: VendorForm) => vendorsApi.update(editId!, data as any),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['vendors'] }); resetForm() },
+    onError: (err: any) => setSaveError(err?.response?.data?.detail ?? 'Failed to save vendor. Please try again.'),
   })
 
-  const resetForm = () => { setForm(emptyForm()); setShowForm(false); setEditId(null) }
+  const resetForm = () => { setForm(emptyForm()); setShowForm(false); setEditId(null); setSaveError('') }
 
   const startEdit = (v: Vendor) => {
     setForm({
@@ -176,11 +179,19 @@ export default function VendorCatalogPage() {
             )}
           </div>
 
+          {saveError && (
+            <p className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {saveError}
+            </p>
+          )}
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={resetForm}>Cancel</Button>
-            <Button variant="primary" loading={createMut.isPending || updateMut.isPending}
+            <Button
+              variant="primary"
+              loading={createMut.isPending || updateMut.isPending}
               disabled={!form.name.trim() || !form.email.trim()}
-              onClick={() => editId ? updateMut.mutate() : createMut.mutate()}>
+              onClick={() => { setSaveError(''); editId ? updateMut.mutate(form) : createMut.mutate(form) }}
+            >
               {editId ? 'Save changes' : 'Add vendor'}
             </Button>
           </div>
@@ -211,8 +222,8 @@ export default function VendorCatalogPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {vendors.map((v) => (
-                <>
-                  <tr key={v.id} className="hover:bg-gray-50 transition-colors">
+                <Fragment key={v.id}>
+                  <tr className="hover:bg-gray-50 transition-colors">
                     <td className="px-3 py-3 text-center">
                       <button onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}
                         className="text-gray-400 hover:text-gray-600">
@@ -251,7 +262,7 @@ export default function VendorCatalogPage() {
                   </tr>
 
                   {expandedId === v.id && (
-                    <tr key={`${v.id}-items`}>
+                    <tr>
                       <td colSpan={8} className="px-6 py-3 bg-blue-50/40">
                         <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
                           <Package className="w-3.5 h-3.5" /> Catalog items — {v.name}
@@ -286,7 +297,7 @@ export default function VendorCatalogPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

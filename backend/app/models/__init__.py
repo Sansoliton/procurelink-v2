@@ -371,6 +371,7 @@ class Customer(Base):
     website = Column(String(300), nullable=True)
     city = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
+    trn = Column(String(50), nullable=True)    # Tax Registration Number
     logo_image = Column(Text, nullable=True)   # base64 data URL (legacy)
     logo_url = Column(String(500), nullable=True)  # MinIO/storage URL
     status = Column(String(20), default="active")
@@ -411,6 +412,24 @@ class CustomerInvoice(Base):
     total_amount = Column(Float, default=0.0)
     doc_data = Column(JSON, default=dict)   # full InvoiceDoc JSON
     pdf_url = Column(String, nullable=True)  # MinIO object URL after PDF generation
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Delivery Notes (partial/full delivery tracking) ──────────────
+
+class DeliveryNote(Base):
+    __tablename__ = "delivery_notes"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    org_id = Column(String, ForeignKey("organisations.id"), nullable=False)
+    delivery_no = Column(String(50), nullable=False)
+    quotation_id = Column(String, nullable=True)       # FK-like ref to customer_quotations.id
+    quotation_no = Column(String(50), nullable=True)
+    customer_id = Column(String, nullable=True)
+    customer_name = Column(String(200), nullable=True)
+    status = Column(String(20), default="draft")       # draft | sent | delivered
+    doc_data = Column(JSON, default=dict)              # items, notes, driver, vehicle
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

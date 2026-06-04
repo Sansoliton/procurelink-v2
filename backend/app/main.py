@@ -6,6 +6,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from sqlalchemy import text, inspect
 from app.config import settings
 from app.database import engine, Base
 from app.routers import (
@@ -13,18 +14,49 @@ from app.routers import (
     requirements_router, rfqs_router, quotes_router,
     notifications_router, analytics_router, health_router,
     customers_router, cquotes_router, cinvoices_router,
-    logos_router, org_router,
+    logos_router, org_router, delivery_notes_router,
 )
 
-# SQLite local dev: auto-create tables without running Alembic.
-# On Postgres (production) start.sh runs `alembic upgrade head` before uvicorn.
-if settings.database_url.startswith("sqlite"):
-    Base.metadata.create_all(bind=engine)
+# Create all tables (new ones only — existing tables are not touched).
+Base.metadata.create_all(bind=engine)
+
+# ── Safe column migrations ─────────────────────────────────────────
+# create_all() skips tables that already exist, so new columns on existing
+# tables must be added explicitly. We use try/except so re-running is safe.
+_COLUMN_MIGRATIONS = [
+    # (table, column, definition)
+    # customers — columns added after initial migration
+    ("customers", "trn",        "VARCHAR(50)"),
+    ("customers", "logo_image", "TEXT"),
+    ("customers", "logo_url",   "VARCHAR(500)"),
+    ("customers", "updated_at", "TIMESTAMP"),
+    # customer_quotations / invoices
+    ("customer_quotations", "pdf_url",      "VARCHAR"),
+    ("customer_quotations", "customer_id",  "VARCHAR"),
+    ("customer_invoices",   "pdf_url",      "VARCHAR"),
+    ("customer_invoices",   "customer_id",  "VARCHAR"),
+    ("customer_invoices",   "quotation_no", "VARCHAR(50)"),  # used in /related filter
+    # delivery_notes (handled by create_all but listed for safety)
+]
+
+def _add_column_if_missing(table: str, column: str, definition: str) -> None:
+    inspector = inspect(engine)
+    existing = [c["name"] for c in inspector.get_columns(table)]
+    if column not in existing:
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+
+for _table, _col, _def in _COLUMN_MIGRATIONS:
+    try:
+        _add_column_if_missing(_table, _col, _def)
+    except Exception as _exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Column migration skipped (%s.%s): %s", _table, _col, _exc)
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 app = FastAPI(
-    title="ProcureLink API",
+    title="QuoteMe API",
     description="Multi-tenant B2B procurement platform",
     version="2.0.0",
     docs_url="/docs",
@@ -61,7 +93,8 @@ app.include_router(cquotes_router)
 app.include_router(cinvoices_router)
 app.include_router(logos_router)
 app.include_router(org_router)
+app.include_router(delivery_notes_router)
 
 @app.get("/")
 def root():
-    return {"app": "ProcureLink", "version": "2.0.0", "docs": "/docs"}
+    return {"app": "QuoteMe", "version": "2.0.0", "docs": "/docs"}

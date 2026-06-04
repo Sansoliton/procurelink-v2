@@ -215,7 +215,7 @@ async function _writeOneDrive(key: string, value: string): Promise<void> {
   const token = sessionStorage.getItem(OD_TOKEN_KEY)
   if (!token) return
   const cfg    = getConfig()
-  const folder = cfg.oneDriveFolderPath?.trim() || 'ProcureLink'
+  const folder = cfg.oneDriveFolderPath?.trim() || 'QuoteMe'
   await fetch(
     `https://graph.microsoft.com/v1.0/me/drive/root:/${folder}/${key}.json:/content`,
     {

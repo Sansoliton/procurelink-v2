@@ -50,7 +50,7 @@ export default function VendorPortalPage() {
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
           <h1 className="text-xl font-bold text-gray-900">
-            Procure<span className="text-blue-600">Link</span>
+            Quote<span className="text-blue-600">Me</span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">Request for Quotation</p>
         </div>
@@ -126,7 +126,7 @@ export default function VendorPortalPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400">
-          Powered by ProcureLink · For questions, reply to the RFQ email you received.
+          Powered by QuoteMe · For questions, reply to the RFQ email you received.
         </p>
       </div>
     </div>

@@ -13,7 +13,7 @@ interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({ variant = 'ghost', loading, children, className, ...props }: BtnProps) {
   const base = variant === 'primary' ? 'btn-primary' : variant === 'danger' ? 'btn-danger' : 'btn-ghost'
   return (
-    <button className={cn(base, className)} disabled={loading || props.disabled} {...props}>
+    <button type={props.type ?? 'button'} className={cn(base, className)} disabled={loading || props.disabled} {...props}>
       {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
       {children}
     </button>

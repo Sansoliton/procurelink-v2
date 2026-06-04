@@ -3,7 +3,7 @@ import type {
   TokenResponse, User, Project, ProjectMember, Vendor,
   Requirement, LineItem, RFQ, Quotation, VendorPO, PurchaseOrder, PurchaseOrderDetail,
   Invoice, Notification, AnalyticsOverview,
-  Customer, CustomerQuotation, CustomerInvoice,
+  Customer, CustomerQuotation, CustomerInvoice, DeliveryNote,
 } from '@/types'
 
 const api = axios.create({
@@ -203,6 +203,12 @@ export const cquotesApi = {
   getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cquotes/${id}/pdf`).then((r) => r.data),
   getRelated: (id: string) =>
     api.get<{ invoices: CustomerInvoice[]; pos: unknown[] }>(`/cquotes/${id}/related`).then((r) => r.data),
+  uploadFile: (id: string, file: File): Promise<{ url: string; filename: string; content_type: string; file_id: string }> => {
+    const fd = new FormData(); fd.append('file', file)
+    return api.post(`/cquotes/${id}/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data)
+  },
 }
 
 // -- Customer Invoices (sales-side) --
@@ -215,6 +221,21 @@ export const cinvoicesApi = {
     api.put<CustomerInvoice>(`/cinvoices/${id}`, data).then((r) => r.data),
   delete: (id: string) => api.delete(`/cinvoices/${id}`).then((r) => r.data),
   getPdf: (id: string) => api.get<{ pdf_url: string }>(`/cinvoices/${id}/pdf`).then((r) => r.data),
+}
+
+// ── Delivery Notes ────────────────────────────────────────────────
+export const deliveryNotesApi = {
+  list: (params?: { quotation_id?: string; quotation_no?: string }) =>
+    api.get<DeliveryNote[]>('/delivery-notes/', { params }).then((r) => r.data),
+  get: (id: string) => api.get<DeliveryNote>(`/delivery-notes/${id}`).then((r) => r.data),
+  create: (data: Omit<DeliveryNote, 'id' | 'org_id' | 'created_at' | 'updated_at'>) =>
+    api.post<DeliveryNote>('/delivery-notes/', data).then((r) => r.data),
+  update: (id: string, data: Partial<Omit<DeliveryNote, 'id' | 'org_id' | 'created_at' | 'updated_at'>>) =>
+    api.put<DeliveryNote>(`/delivery-notes/${id}`, data).then((r) => r.data),
+  delete: (id: string) => api.delete(`/delivery-notes/${id}`).then((r) => r.data),
+  getPdf: (id: string): Promise<string> =>
+    api.get(`/delivery-notes/${id}/pdf`, { responseType: 'blob' })
+      .then((r) => URL.createObjectURL(r.data)),
 }
 
 export default api

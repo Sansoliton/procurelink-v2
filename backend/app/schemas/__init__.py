@@ -237,6 +237,9 @@ class PurchaseOrderDetailOut(BaseModel):
     quotation_ref: str
     total_amount: float
     vendor_count: int
+    quotation_amount: float = 0.0
+    invoiced_amount: float = 0.0
+    remaining_to_invoice: float = 0.0
     pdf_url: Optional[str] = None
 
 class InvoiceOut(BaseModel):
@@ -290,6 +293,7 @@ class CustomerCreate(BaseModel):
     website: Optional[str] = None
     city: Optional[str] = None
     notes: Optional[str] = None
+    trn: Optional[str] = None
     logo_image: Optional[str] = None
     logo_url: Optional[str] = None
     status: str = "active"
@@ -303,6 +307,7 @@ class CustomerUpdate(BaseModel):
     website: Optional[str] = None
     city: Optional[str] = None
     notes: Optional[str] = None
+    trn: Optional[str] = None
     logo_image: Optional[str] = None
     logo_url: Optional[str] = None
     status: Optional[str] = None
@@ -318,6 +323,7 @@ class CustomerOut(BaseModel):
     website: Optional[str]
     city: Optional[str]
     notes: Optional[str]
+    trn: Optional[str] = None
     logo_image: Optional[str]
     logo_url: Optional[str] = None
     status: str
@@ -360,6 +366,7 @@ class CustomerInvoiceUpsert(BaseModel):
     status: str = "pending"
     total_amount: float = 0.0
     doc_data: dict = {}
+    pdf_url: Optional[str] = None
 
 class CustomerInvoiceOut(BaseModel):
     id: str
@@ -372,6 +379,32 @@ class CustomerInvoiceOut(BaseModel):
     total_amount: float
     doc_data: dict
     pdf_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    class Config: from_attributes = True
+
+
+# ── Delivery Notes ────────────────────────────────────────────────
+
+class DeliveryNoteCreate(BaseModel):
+    delivery_no: str
+    quotation_id: Optional[str] = None
+    quotation_no: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    status: str = "draft"
+    doc_data: dict = {}
+
+class DeliveryNoteOut(BaseModel):
+    id: str
+    org_id: str
+    delivery_no: str
+    quotation_id: Optional[str]
+    quotation_no: Optional[str]
+    customer_id: Optional[str]
+    customer_name: Optional[str]
+    status: str
+    doc_data: dict
     created_at: datetime
     updated_at: datetime
     class Config: from_attributes = True

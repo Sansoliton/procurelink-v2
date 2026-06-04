@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ProjectProvider } from '@/context/ProjectContext'
 import { notificationsApi } from '@/api'
 import { Spinner } from '@/components/ui'
+import quoteMeLogo from '@/assets/images/quoteme-logo.svg'
 
 // Pages
 import LoginPage from '@/pages/auth/LoginPage'
@@ -79,12 +80,14 @@ function LeftSidebar() {
     <aside className="h-screen w-56 bg-white border-r border-gray-200 flex flex-col py-5 px-3 sticky top-0 z-30">
       {/* Logo + bell */}
       <div className="flex items-center justify-between mb-5 px-1">
-        <div
-          className="text-xl font-bold tracking-tight text-gray-900 cursor-pointer"
+        <button
+          type="button"
+          className="cursor-pointer"
           onClick={() => navigate('/')}
+          aria-label="Go to dashboard"
         >
-          Procure<span className="text-blue-600">Link</span>
-        </div>
+          <img src={quoteMeLogo} alt="QuoteMe" className="h-9 w-auto" />
+        </button>
         <NotifBell />
       </div>
 

@@ -167,6 +167,9 @@ export interface PurchaseOrderDetail extends PurchaseOrder {
   quotation_ref: string
   total_amount: number
   vendor_count: number
+  quotation_amount: number
+  invoiced_amount: number
+  remaining_to_invoice: number
   pdf_url?: string
 }
 
@@ -215,6 +218,7 @@ export interface Customer {
   website?: string
   city?: string
   notes?: string
+  trn?: string
   logo_image?: string
   logo_url?: string
   status: 'active' | 'inactive'
@@ -248,6 +252,34 @@ export interface CustomerInvoice {
   total_amount: number
   doc_data: Record<string, unknown>
   pdf_url?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DeliveryNoteItem {
+  lineKey: string
+  description: string
+  orderedQty: number
+  deliveredQty: number
+  unit?: string
+}
+
+export interface DeliveryNote {
+  id: string
+  org_id: string
+  delivery_no: string
+  quotation_id?: string
+  quotation_no?: string
+  customer_id?: string
+  customer_name?: string
+  status: 'draft' | 'sent' | 'delivered'
+  doc_data: {
+    date?: string
+    items?: DeliveryNoteItem[]
+    notes?: string
+    driverName?: string
+    vehicleNo?: string
+  }
   created_at: string
   updated_at: string
 }

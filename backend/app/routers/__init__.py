@@ -5,6 +5,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -13,7 +14,7 @@ from app.models import (
     User, Organisation, Project, ProjectMember, Vendor,
     Requirement, LineItem, RFQ, QuoteLine, Quotation, VendorPO,
     PurchaseOrder, Invoice, Notification, AuditLog,
-    Customer, CustomerQuotation, CustomerInvoice, PasswordResetToken,
+    Customer, CustomerQuotation, CustomerInvoice, DeliveryNote, PasswordResetToken,
     RFQStatus, RequirementStatus, QuotationStatus, POStatus, InvoiceStatus
 )
 from app.schemas import (
@@ -28,6 +29,7 @@ from app.schemas import (
     CustomerCreate, CustomerUpdate, CustomerOut,
     CustomerQuotationUpsert, CustomerQuotationOut,
     CustomerInvoiceUpsert, CustomerInvoiceOut,
+    DeliveryNoteCreate, DeliveryNoteOut,
     PasswordChangeRequest, ForgotPasswordRequest, ResetPasswordRequest,
     FileUploadOut,
 )
@@ -135,7 +137,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
         try:
             send_email_task.delay(
                 user.email,
-                "ProcureLink — Reset your password",
+                "QuoteMe — Reset your password",
                 f"<p>Your password reset token: <b>{token}</b></p><p>Expires in 2 hours.</p>",
             )
         except Exception:
@@ -782,6 +784,16 @@ def list_pos(
     for po in pos:
         q = db.get(Quotation, po.quotation_id)
         vendor_pos = db.query(VendorPO).filter(VendorPO.quotation_id == po.quotation_id).all()
+        inv = db.query(Invoice).filter(
+            Invoice.purchase_order_id == po.id,
+            Invoice.org_id == current_user.org_id,
+        ).first()
+        quotation_amount = float(
+            (q.customer_total if q and q.customer_total is not None else None)
+            or (q.total_cost if q and q.total_cost is not None else 0)
+        )
+        invoiced_amount = float(inv.amount) if inv and inv.amount is not None else 0.0
+        remaining_to_invoice = max(quotation_amount - invoiced_amount, 0.0)
         result.append(PurchaseOrderDetailOut(
             id=po.id,
             reference=po.reference,
@@ -792,6 +804,9 @@ def list_pos(
             quotation_ref=q.reference if q else "—",
             total_amount=round(sum(vpo.amount for vpo in vendor_pos), 2),
             vendor_count=len(vendor_pos),
+            quotation_amount=round(quotation_amount, 2),
+            invoiced_amount=round(invoiced_amount, 2),
+            remaining_to_invoice=round(remaining_to_invoice, 2),
             pdf_url=po.pdf_url,
         ))
     return result
@@ -811,6 +826,16 @@ def get_po_for_quote(
         raise HTTPException(404, "No PO for this quotation")
     q = db.get(Quotation, po.quotation_id)
     vendor_pos = db.query(VendorPO).filter(VendorPO.quotation_id == quote_id).all()
+    inv = db.query(Invoice).filter(
+        Invoice.purchase_order_id == po.id,
+        Invoice.org_id == current_user.org_id,
+    ).first()
+    quotation_amount = float(
+        (q.customer_total if q and q.customer_total is not None else None)
+        or (q.total_cost if q and q.total_cost is not None else 0)
+    )
+    invoiced_amount = float(inv.amount) if inv and inv.amount is not None else 0.0
+    remaining_to_invoice = max(quotation_amount - invoiced_amount, 0.0)
     return PurchaseOrderDetailOut(
         id=po.id,
         reference=po.reference,
@@ -821,6 +846,9 @@ def get_po_for_quote(
         quotation_ref=q.reference if q else "—",
         total_amount=round(sum(vpo.amount for vpo in vendor_pos), 2),
         vendor_count=len(vendor_pos),
+        quotation_amount=round(quotation_amount, 2),
+        invoiced_amount=round(invoiced_amount, 2),
+        remaining_to_invoice=round(remaining_to_invoice, 2),
         pdf_url=po.pdf_url,
     )
 
@@ -1347,6 +1375,60 @@ def update_cquote(
         pass
     return cq
 
+@cquotes_router.post("/{cq_id}/upload")
+async def upload_cquote_attachment(
+    cq_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a file attachment (PO doc, invoice scan, etc.) for a customer quotation."""
+    import mimetypes, uuid, base64
+    from app.config import settings as cfg
+
+    cq = db.query(CustomerQuotation).filter(
+        CustomerQuotation.id == cq_id, CustomerQuotation.org_id == current_user.org_id
+    ).first()
+    if not cq:
+        raise HTTPException(404, "Not found")
+
+    content = await file.read()
+    fname = file.filename or "file"
+    content_type = file.content_type or mimetypes.guess_type(fname)[0] or "application/octet-stream"
+    ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else "bin"
+    file_id = str(uuid.uuid4())
+    object_key = f"attachments/cquotes/{cq_id}/{file_id}.{ext}"
+
+    if not cfg.minio_endpoint:
+        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
+        return {"url": data_url, "filename": fname, "content_type": content_type, "file_id": file_id}
+
+    try:
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"http{'s' if cfg.minio_secure else ''}://{cfg.minio_endpoint}",
+            aws_access_key_id=cfg.minio_access_key,
+            aws_secret_access_key=cfg.minio_secret_key,
+        )
+        try:
+            s3.head_bucket(Bucket=cfg.minio_bucket)
+        except Exception:
+            s3.create_bucket(Bucket=cfg.minio_bucket)
+        s3.put_object(
+            Bucket=cfg.minio_bucket,
+            Key=object_key,
+            Body=content,
+            ContentType=content_type,
+        )
+        url = f"{cfg.minio_public_url.rstrip('/')}/{cfg.minio_bucket}/{object_key}"
+        return {"url": url, "filename": fname, "content_type": content_type, "file_id": file_id}
+    except Exception as exc:
+        log.warning("MinIO cquote attachment upload failed: %s", exc)
+        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
+        return {"url": data_url, "filename": fname, "content_type": content_type, "file_id": file_id}
+
+
 @cquotes_router.delete("/{cq_id}")
 def delete_cquote(
     cq_id: str,
@@ -1390,13 +1472,17 @@ def get_cquote_related(
         "invoices": [
             {
                 "id": inv.id,
+                "org_id": inv.org_id,
                 "invoice_no": inv.invoice_no,
                 "quotation_no": inv.quotation_no,
+                "customer_id": inv.customer_id,
                 "customer_name": inv.customer_name,
                 "status": inv.status,
                 "total_amount": inv.total_amount,
+                "doc_data": inv.doc_data or {},
                 "pdf_url": inv.pdf_url,
                 "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "updated_at": inv.updated_at.isoformat() if inv.updated_at else None,
             }
             for inv in invoices
         ],
@@ -1593,3 +1679,264 @@ def patch_org_settings(
     db.commit()
     db.refresh(org)
     return org.settings
+
+
+# ── Delivery Notes router ──────────────────────────────────────────
+
+delivery_notes_router = APIRouter(prefix="/delivery-notes", tags=["delivery-notes"])
+
+
+def _next_dn_no(org_id: str, db) -> str:
+    import datetime as dt
+    yy = str(dt.datetime.utcnow().year)[-2:]
+    existing = (
+        db.query(DeliveryNote.delivery_no)
+        .filter(DeliveryNote.org_id == org_id)
+        .all()
+    )
+    nums = []
+    prefix = f"DN{yy}/"
+    for (dn,) in existing:
+        if dn and dn.startswith(prefix):
+            try:
+                nums.append(int(dn.split("/")[1]))
+            except (IndexError, ValueError):
+                pass
+    nxt = max(nums, default=0) + 1
+    return f"{prefix}{str(nxt).zfill(4)}"
+
+
+@delivery_notes_router.get("/", response_model=List[DeliveryNoteOut])
+def list_delivery_notes(
+    quotation_id: Optional[str] = Query(None),
+    quotation_no: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = db.query(DeliveryNote).filter(DeliveryNote.org_id == current_user.org_id)
+    if quotation_id:
+        q = q.filter(DeliveryNote.quotation_id == quotation_id)
+    elif quotation_no:
+        q = q.filter(DeliveryNote.quotation_no == quotation_no)
+    return q.order_by(DeliveryNote.created_at.desc()).all()
+
+
+@delivery_notes_router.post("/", response_model=DeliveryNoteOut)
+def create_delivery_note(
+    payload: DeliveryNoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    data = payload.model_dump()
+    if not data.get("delivery_no"):
+        data["delivery_no"] = _next_dn_no(current_user.org_id, db)
+    dn = DeliveryNote(org_id=current_user.org_id, **data)
+    db.add(dn)
+    db.commit()
+    db.refresh(dn)
+    return dn
+
+
+@delivery_notes_router.get("/{dn_id}", response_model=DeliveryNoteOut)
+def get_delivery_note(
+    dn_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    dn = db.query(DeliveryNote).filter(
+        DeliveryNote.id == dn_id, DeliveryNote.org_id == current_user.org_id
+    ).first()
+    if not dn:
+        raise HTTPException(404, "Not found")
+    return dn
+
+
+@delivery_notes_router.put("/{dn_id}", response_model=DeliveryNoteOut)
+def update_delivery_note(
+    dn_id: str,
+    payload: DeliveryNoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    dn = db.query(DeliveryNote).filter(
+        DeliveryNote.id == dn_id, DeliveryNote.org_id == current_user.org_id
+    ).first()
+    if not dn:
+        raise HTTPException(404, "Not found")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(dn, k, v)
+    dn.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(dn)
+    return dn
+
+
+@delivery_notes_router.get("/{dn_id}/pdf")
+def get_delivery_note_pdf(
+    dn_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate and stream a PDF for a delivery note (synchronous, no Celery required)."""
+    dn = db.query(DeliveryNote).filter(
+        DeliveryNote.id == dn_id, DeliveryNote.org_id == current_user.org_id
+    ).first()
+    if not dn:
+        raise HTTPException(404, "Not found")
+
+    try:
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        buf = io.BytesIO()
+        c = rl_canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        dd = dn.doc_data or {}
+        cq = None
+        if dn.quotation_id:
+            cq = db.query(CustomerQuotation).filter(
+                CustomerQuotation.id == dn.quotation_id,
+                CustomerQuotation.org_id == current_user.org_id,
+            ).first()
+        if not cq and dn.quotation_no:
+            cq = db.query(CustomerQuotation).filter(
+                CustomerQuotation.quotation_no == dn.quotation_no,
+                CustomerQuotation.org_id == current_user.org_id,
+            ).order_by(CustomerQuotation.updated_at.desc()).first()
+        qdoc = cq.doc_data if cq and isinstance(cq.doc_data, dict) else {}
+
+        issuer_name = str(qdoc.get("issuerName") or "QuoteMe")
+        issuer_address = str(qdoc.get("issuerAddress") or "")
+        issuer_email = str(qdoc.get("issuerEmail") or "")
+        customer_name = dn.customer_name or str(qdoc.get("customerName") or "—")
+        customer_city = str(qdoc.get("customerCity") or "")
+        customer_tel = str(qdoc.get("customerTel") or "")
+        customer_trn = str(qdoc.get("customerTRN") or "")
+
+        # Header: quotation-like structure
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont("Helvetica-Bold", 18)
+        c.drawCentredString(w / 2, h - 20 * mm, "DELIVERY NOTE")
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(w / 2, h - 27 * mm, dn.delivery_no)
+
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(20 * mm, h - 36 * mm, "To")
+        c.setFont("Helvetica", 9)
+        c.drawString(20 * mm, h - 42 * mm, customer_name)
+        if customer_city:
+            c.drawString(20 * mm, h - 47 * mm, customer_city)
+        if customer_tel:
+            c.drawString(20 * mm, h - 52 * mm, f"Tel: {customer_tel}")
+        if customer_trn:
+            c.drawString(20 * mm, h - 57 * mm, f"TRN: {customer_trn}")
+
+        c.setFont("Helvetica-Bold", 10)
+        c.drawRightString(w - 20 * mm, h - 36 * mm, issuer_name)
+        c.setFont("Helvetica", 9)
+        if issuer_address:
+            c.drawRightString(w - 20 * mm, h - 42 * mm, issuer_address)
+        if issuer_email:
+            c.drawRightString(w - 20 * mm, h - 47 * mm, issuer_email)
+
+        c.setLineWidth(0.5)
+        c.line(20 * mm, h - 62 * mm, w - 20 * mm, h - 62 * mm)
+
+        # Meta row
+        y = h - 69 * mm
+        c.setFont("Helvetica", 9)
+        c.drawString(20 * mm, y, f"Date: {dd.get('date', '—')}")
+        c.drawString(70 * mm, y, f"Quotation Ref: {dn.quotation_no or '—'}")
+        if dd.get("driverName"):
+            c.drawString(140 * mm, y, f"Driver: {dd.get('driverName')}")
+
+        # Items table (no pricing columns)
+        y -= 8 * mm
+        c.setLineWidth(0.3)
+        c.setFillColorRGB(0.95, 0.95, 0.95)
+        c.rect(20 * mm, y - 1 * mm, w - 40 * mm, 7 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(22 * mm, y + 1.5 * mm, "#")
+        c.drawString(30 * mm, y + 1.5 * mm, "Description")
+        c.drawRightString(w - 62 * mm, y + 1.5 * mm, "Ordered")
+        c.drawRightString(w - 42 * mm, y + 1.5 * mm, "Delivered")
+        c.drawRightString(w - 20 * mm, y + 1.5 * mm, "Unit")
+        y -= 8 * mm
+
+        c.setFont("Helvetica", 9)
+        for idx, item in enumerate(dd.get("items", []), start=1):
+            desc = str(item.get("description", ""))[:62]
+            ordered = str(item.get("orderedQty", ""))
+            delivered = str(item.get("deliveredQty", ""))
+            unit = str(item.get("unit", ""))
+            c.drawString(22 * mm, y, str(idx))
+            c.drawString(30 * mm, y, desc)
+            c.drawRightString(w - 62 * mm, y, ordered)
+            c.drawRightString(w - 42 * mm, y, delivered)
+            c.drawRightString(w - 20 * mm, y, unit)
+            y -= 6 * mm
+            if y < 30 * mm:
+                c.showPage()
+                y = h - 25 * mm
+
+        c.setLineWidth(0.3)
+        c.line(20 * mm, y + 2 * mm, w - 20 * mm, y + 2 * mm)
+
+        if dd.get("notes"):
+            y -= 8 * mm
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(20 * mm, y, "Notes:")
+            y -= 6 * mm
+            c.setFont("Helvetica", 9)
+            # Wrap long notes
+            words = str(dd["notes"]).split()
+            line_buf, line_words = "", []
+            for word in words:
+                test = (line_buf + " " + word).strip()
+                if c.stringWidth(test, "Helvetica", 9) > (w - 42 * mm):
+                    c.drawString(20 * mm, y, line_buf)
+                    y -= 5.5 * mm
+                    line_buf = word
+                else:
+                    line_buf = test
+            if line_buf:
+                c.drawString(20 * mm, y, line_buf)
+
+        # Footer
+        c.setFont("Helvetica", 8)
+        c.setFillColorRGB(0.5, 0.5, 0.5)
+        c.drawString(20 * mm, 12 * mm, f"Delivery Note No: {dn.delivery_no}  |  Status: {dn.status}")
+        c.drawRightString(w - 20 * mm, 12 * mm, f"Generated by QuoteMe v2")
+        c.setFillColorRGB(0, 0, 0)
+
+        c.save()
+        buf.seek(0)
+
+        filename = f"{dn.delivery_no.replace('/', '-')}.pdf"
+        return StreamingResponse(
+            buf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+    except Exception as exc:
+        log.error("Delivery note PDF generation failed: %s", exc)
+        raise HTTPException(500, "PDF generation failed")
+
+
+@delivery_notes_router.delete("/{dn_id}")
+def delete_delivery_note(
+    dn_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    dn = db.query(DeliveryNote).filter(
+        DeliveryNote.id == dn_id, DeliveryNote.org_id == current_user.org_id
+    ).first()
+    if not dn:
+        raise HTTPException(404, "Not found")
+    db.delete(dn)
+    db.commit()
+    return {"status": "deleted"}

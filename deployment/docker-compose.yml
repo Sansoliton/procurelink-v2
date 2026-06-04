@@ -1,0 +1,63 @@
+version: "3.9"
+
+# ProcureLink v2 — local stack with Nginx Proxy Manager
+#
+# Usage:
+#   docker compose -f deployment/docker-compose.yml up --build
+#
+# Ports:
+#   80   → HTTP proxy (Nginx Proxy Manager)
+#   443  → HTTPS proxy
+#   81   → NPM admin UI  →  http://localhost:81
+#
+# First-time NPM login: admin@example.com / changeme
+
+services:
+
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: pl_npm
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+    container_name: pl_frontend
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../backend
+    container_name: pl_api
+    environment:
+      DATABASE_URL: sqlite:////data/procurelink.db
+      SECRET_KEY: ${SECRET_KEY:-changeme_in_production_32chars_min}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      MINIO_ENDPOINT: ""
+    volumes:
+      - sqlite_data:/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 2000 --workers 2
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+networks:
+  procurelink_net:
+    driver: bridge
+
+volumes:
+  sqlite_data:
+  npm_data:
+  npm_letsencrypt:

@@ -229,8 +229,8 @@ export default function StoragePage() {
               value={cfg.oneDriveTenantId ?? ''} onChange={e => patch({ oneDriveTenantId: e.target.value })} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Folder path in OneDrive <span className="text-gray-400">(default: ProcureLink)</span></label>
-            <input className="input-base" placeholder="ProcureLink"
+            <label className="block text-xs font-medium text-gray-600 mb-1">Folder path in OneDrive <span className="text-gray-400">(default: QuoteMe)</span></label>
+            <input className="input-base" placeholder="QuoteMe"
               value={cfg.oneDriveFolderPath ?? ''} onChange={e => patch({ oneDriveFolderPath: e.target.value })} />
           </div>
           <div className="flex items-center gap-3 pt-1">
