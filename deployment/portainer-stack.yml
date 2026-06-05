@@ -1,52 +1,38 @@
 version: "3.9"
 
-# ProcureLink v2 — Portainer stack with Nginx Proxy Manager
+# ProcureLink v2 — Portainer stack
 #
 # Required environment variables (set in Portainer → Stack → Environment):
 #   SECRET_KEY   — JWT secret, minimum 32 characters
 #   DB_PASSWORD  — PostgreSQL password
 #
 # Optional:
-#   APP_URL      — public URL, e.g. https://app.mycompany.com (default: http://localhost)
+#   APP_URL      — public URL, e.g. https://quotme.sanvx.online (default: http://localhost)
 #   DB_USER      — PostgreSQL username (default: proc)
 #   DB_NAME      — PostgreSQL database name (default: procurelink)
 #
-# After first deploy:
-#   1. Open http://<your-server>:81  (Nginx Proxy Manager UI)
-#   2. Login: admin@example.com / changeme  (change immediately!)
-#   3. Add a Proxy Host — see README below.
+# Ports (point your reverse proxy to these):
+#   Frontend : <server>:2300
+#   Backend  : <server>:2301
 
 services:
 
-  # ── Nginx Proxy Manager ───────────────────────────────────────
-  # Web UI: http://<server>:81
-  # Default login: admin@example.com / changeme
-  nginx-proxy-manager:
-    image: jc21/nginx-proxy-manager:latest
-    container_name: pl_npm
-    ports:
-      - "80:80"      # HTTP traffic
-      - "443:443"    # HTTPS traffic
-      - "81:81"      # NPM admin UI
-    volumes:
-      - npm_data:/data
-      - npm_letsencrypt:/etc/letsencrypt
-    networks:
-      - procurelink_net
-    restart: unless-stopped
-
-  # ── React SPA (internal) ──────────────────────────────────────
+  # ── React SPA ─────────────────────────────────────────────────
   frontend:
     image: registry.sanvx.online/procurelink-frontend:latest
     container_name: pl_frontend
+    ports:
+      - "2300:80"
     networks:
       - procurelink_net
     restart: unless-stopped
 
-  # ── FastAPI backend (internal) ────────────────────────────────
+  # ── FastAPI backend ───────────────────────────────────────────
   api:
     image: registry.sanvx.online/procurelink-backend:latest
     container_name: pl_api
+    ports:
+      - "2301:2000"
     environment:
       DATABASE_URL:  postgresql://${DB_USER:-proc}:${DB_PASSWORD}@db:5432/${DB_NAME:-procurelink}
       SECRET_KEY:    ${SECRET_KEY}
@@ -88,5 +74,3 @@ networks:
 
 volumes:
   postgres_data:
-  npm_data:
-  npm_letsencrypt:
