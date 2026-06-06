@@ -59,6 +59,34 @@ prod-logs:
 prod-migrate:
 	docker compose -f docker-compose.prod.yml exec api alembic upgrade head
 
+# ── Build & Push to private registry ─────────────────────────────
+REGISTRY   ?= registry.sanvx.online
+GIT_SHA    := $(shell git rev-parse --short HEAD)
+
+build-backend:
+	docker build --platform linux/amd64 -t $(REGISTRY)/procurelink-backend:latest \
+	  -t $(REGISTRY)/procurelink-backend:$(GIT_SHA) ./backend
+
+build-frontend:
+	docker build --platform linux/amd64 \
+	  --build-arg VITE_API_URL=/api \
+	  -t $(REGISTRY)/procurelink-frontend:latest \
+	  -t $(REGISTRY)/procurelink-frontend:$(GIT_SHA) ./frontend
+
+build: build-backend build-frontend
+
+push-backend:
+	docker push $(REGISTRY)/procurelink-backend:latest
+	docker push $(REGISTRY)/procurelink-backend:$(GIT_SHA)
+
+push-frontend:
+	docker push $(REGISTRY)/procurelink-frontend:latest
+	docker push $(REGISTRY)/procurelink-frontend:$(GIT_SHA)
+
+push: push-backend push-frontend
+
+build-push: build push
+
 # Build images locally (without pushing) for self-hosted use
 prod-build-local:
 	docker build -t procurelink-backend:local ./backend

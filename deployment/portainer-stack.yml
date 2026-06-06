@@ -21,6 +21,7 @@ services:
   frontend:
     image: registry.sanvx.online/procurelink-frontend:latest
     container_name: pl_frontend
+    pull_policy: always
     ports:
       - "2300:80"
     networks:
@@ -31,6 +32,7 @@ services:
   api:
     image: registry.sanvx.online/procurelink-backend:latest
     container_name: pl_api
+    pull_policy: always
     ports:
       - "2301:2000"
     environment:
@@ -41,7 +43,6 @@ services:
       ENVIRONMENT:   production
       DEBUG:         "false"
       MINIO_ENDPOINT: ""
-    command: uvicorn app.main:app --host 0.0.0.0 --port 2000 --workers 2
     depends_on:
       db:
         condition: service_healthy

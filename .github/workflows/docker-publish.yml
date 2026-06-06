@@ -1,17 +1,28 @@
 name: Build & Push
 
+# Required GitHub secrets:
+#   PORTAINER_WEBHOOK_URL — from Portainer → Stacks → <stack> → Enable webhook → copy URL
+#
+# Optional GitHub secrets:
+#   APP_URL — e.g. https://quotme.sanvx.online
+#             If set, VITE_API_URL is baked as <APP_URL>/api (absolute).
+#             If not set, VITE_API_URL defaults to /api (relative — works when
+#             frontend & API share the same domain behind a reverse proxy).
+
 on:
   push:
     branches: [ main, quotation_planner ]
   workflow_dispatch:
 
 env:
+  REGISTRY: registry.sanvx.online
   BACKEND_IMAGE: registry.sanvx.online/procurelink-backend
   FRONTEND_IMAGE: registry.sanvx.online/procurelink-frontend
 
 jobs:
+  # ── Job 1: Build images and push to private registry ──────────────
   build-and-push:
-    name: Build & push to registry
+    name: Build & push images
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +32,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── Backend ────────────────────────────────────────────────
+      # ── Backend ────────────────────────────────────────────────────
       - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
@@ -34,7 +45,7 @@ jobs:
           cache-to: type=gha,scope=backend,mode=max
           platforms: linux/amd64
 
-      # ── Frontend ───────────────────────────────────────────────
+      # ── Frontend ───────────────────────────────────────────────────
       - name: Build and push frontend
         uses: docker/build-push-action@v5
         with:
@@ -44,7 +55,26 @@ jobs:
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           build-args: |
-            VITE_API_URL=${{ secrets.APP_URL }}/api
+            VITE_API_URL=${{ secrets.APP_URL && format('{0}/api', secrets.APP_URL) || '/api' }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
           platforms: linux/amd64
+
+  # ── Job 2: Tell Portainer to pull the new images and redeploy ─────
+  deploy:
+    name: Redeploy Portainer stack
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Portainer webhook
+        run: |
+          WEBHOOK="${{ secrets.PORTAINER_WEBHOOK_URL }}"
+          if [ -z "$WEBHOOK" ]; then
+            echo "⚠️  PORTAINER_WEBHOOK_URL secret not set — skipping redeploy."
+            echo "    To enable auto-deploy: Portainer → Stacks → <stack> → Enable webhook → add URL as PORTAINER_WEBHOOK_URL secret."
+            exit 0
+          fi
+          echo "Triggering Portainer redeploy..."
+          curl -f -X POST "$WEBHOOK"
+          echo "✅ Portainer redeploy triggered."

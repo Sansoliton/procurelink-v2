@@ -18,7 +18,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export default function RegisterPage() {
-  const { login, user } = useAuth()
+  const { login, user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export default function RegisterPage() {
               </p>
             )}
 
-            <Button variant="primary" type="submit" loading={mutation.isPending} className="w-full justify-center">
+            <Button variant="primary" type="submit" loading={mutation.isPending || (mutation.isSuccess && authLoading)} className="w-full justify-center">
               Create account
             </Button>
           </form>

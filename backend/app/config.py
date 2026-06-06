@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     # Frontend
     frontend_url: str = "http://localhost:5173"
+    # Comma-separated extra allowed CORS origins (e.g. production URL set via ALLOWED_ORIGINS env var)
+    allowed_origins: str = ""
 
     # AI (optional)
     gemini_api_key: Optional[str] = None

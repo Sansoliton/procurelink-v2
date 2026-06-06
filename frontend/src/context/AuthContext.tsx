@@ -5,7 +5,7 @@ import { authApi } from '@/api'
 interface AuthContextType {
   user: User | null
   token: string | null
-  login: (token: string) => Promise<void>
+  login: (token: string) => void
   logout: () => void
   isLoading: boolean
 }
@@ -30,11 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token])
 
-  const login = async (newToken: string) => {
+  const login = (newToken: string) => {
     localStorage.setItem('pl_token', newToken)
     setToken(newToken)
-    const me = await authApi.me()
-    setUser(me)
+    // useEffect watches token and calls authApi.me() — no duplicate call here
   }
 
   const logout = () => {

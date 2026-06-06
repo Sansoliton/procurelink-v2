@@ -17,7 +17,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export default function LoginPage() {
-  const { login, user } = useAuth()
+  const { login, user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function LoginPage() {
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: 'admin@demo.com', password: 'password123' },
+    defaultValues: { email: '', password: '' },
   })
 
   const mutation = useMutation({
@@ -74,7 +74,7 @@ export default function LoginPage() {
               </p>
             )}
 
-            <Button variant="primary" type="submit" loading={mutation.isPending} className="w-full justify-center">
+            <Button variant="primary" type="submit" loading={mutation.isPending || (mutation.isSuccess && authLoading)} className="w-full justify-center">
               Sign in
             </Button>
           </form>
@@ -87,10 +87,6 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-          <strong>Demo credentials</strong><br />
-          admin@demo.com / password123
-        </div>
       </div>
     </div>
   )
