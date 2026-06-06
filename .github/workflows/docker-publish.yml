@@ -1,13 +1,13 @@
 name: Build & Push
 
 on:
+  push:
+    branches: [ main, quotation_planner ]
   workflow_dispatch:
 
 env:
-  REGISTRY: registry.sanvx.online
   BACKEND_IMAGE: registry.sanvx.online/procurelink-backend
   FRONTEND_IMAGE: registry.sanvx.online/procurelink-frontend
-  VITE_API_URL: ${{ secrets.APP_URL }}/api
 
 jobs:
   build-and-push:
@@ -51,7 +51,7 @@ jobs:
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           build-args: |
-            VITE_API_URL=${{ env.VITE_API_URL }}
+            VITE_API_URL=${{ secrets.APP_URL }}/api
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
           platforms: linux/amd64
