@@ -20,14 +20,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// On 401 → clear token and redirect to login
+// On 401 → clear token and redirect to login (skip auth endpoints — bad credentials are not session expiry)
 api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('pl_token')
-      localStorage.removeItem('pl_user')
-      window.location.href = '/login'
+      const url: string = err.config?.url ?? ''
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/accept-invite')
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('pl_token')
+        localStorage.removeItem('pl_user')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   }
