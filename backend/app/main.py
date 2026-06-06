@@ -61,6 +61,8 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    root_path="/api",
+    root_path_in_servers=False,
 )
 
 app.state.limiter = limiter
