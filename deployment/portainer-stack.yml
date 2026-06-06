@@ -2,47 +2,58 @@ version: "3.9"
 
 # ProcureLink v2 — Portainer stack
 #
-# Required environment variables (set in Portainer → Stack → Environment):
+# Architecture:
+#   nginx (host:PORT) ──┬── /api/* → api:2000   (backend, internal)
+#                       └── /*     → frontend:80 (SPA, internal)
+#
+# Required environment variables (Portainer → Stack → Environment):
 #   SECRET_KEY   — JWT secret, minimum 32 characters
 #   DB_PASSWORD  — PostgreSQL password
 #
 # Optional:
-#   APP_URL      — public URL, e.g. https://quotme.sanvx.online (default: http://localhost)
-#   DB_USER      — PostgreSQL username (default: proc)
-#   DB_NAME      — PostgreSQL database name (default: procurelink)
-#
-# Ports (point your reverse proxy to these):
-#   Frontend : <server>:2300
-#   Backend  : <server>:2301
+#   APP_URL      — public URL, e.g. https://quotme.sanvx.online  (default: http://localhost)
+#   PORT         — host port nginx listens on                     (default: 2300)
+#   DB_USER      — PostgreSQL username                            (default: proc)
+#   DB_NAME      — PostgreSQL database name                       (default: procurelink)
 
 services:
 
-  # ── React SPA ─────────────────────────────────────────────────
-  frontend:
-    image: registry.sanvx.online/procurelink-frontend:latest
-    container_name: pl_frontend
+  # ── Nginx reverse proxy (single entry point) ─────────────────
+  nginx:
+    image: registry.sanvx.online/procurelink-nginx:latest
+    container_name: pl_nginx
     pull_policy: always
     ports:
-      - "2300:80"
+      - "${PORT:-2300}:80"
+    depends_on:
+      - frontend
+      - api
     networks:
       - procurelink_net
     restart: unless-stopped
 
-  # ── FastAPI backend ───────────────────────────────────────────
+  # ── React SPA (internal — served through nginx) ───────────────
+  frontend:
+    image: registry.sanvx.online/procurelink-frontend:latest
+    container_name: pl_frontend
+    pull_policy: always
+    networks:
+      - procurelink_net
+    restart: unless-stopped
+
+  # ── FastAPI backend (internal — /api/* proxied by nginx) ──────
   api:
     image: registry.sanvx.online/procurelink-backend:latest
     container_name: pl_api
     pull_policy: always
-    ports:
-      - "2301:2000"
     environment:
-      DATABASE_URL:  postgresql://${DB_USER:-proc}:${DB_PASSWORD}@db:5432/${DB_NAME:-procurelink}
-      SECRET_KEY:    ${SECRET_KEY}
+      DATABASE_URL:    postgresql://${DB_USER:-proc}:${DB_PASSWORD}@db:5432/${DB_NAME:-procurelink}
+      SECRET_KEY:      ${SECRET_KEY}
       ALLOWED_ORIGINS: ${APP_URL:-http://localhost}
-      FRONTEND_URL:  ${APP_URL:-http://localhost}
-      ENVIRONMENT:   production
-      DEBUG:         "false"
-      MINIO_ENDPOINT: ""
+      FRONTEND_URL:    ${APP_URL:-http://localhost}
+      ENVIRONMENT:     production
+      DEBUG:           "false"
+      MINIO_ENDPOINT:  ""
     depends_on:
       db:
         condition: service_healthy

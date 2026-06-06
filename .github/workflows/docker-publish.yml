@@ -18,6 +18,7 @@ env:
   REGISTRY: registry.sanvx.online
   BACKEND_IMAGE: registry.sanvx.online/procurelink-backend
   FRONTEND_IMAGE: registry.sanvx.online/procurelink-frontend
+  NGINX_IMAGE: registry.sanvx.online/procurelink-nginx
 
 jobs:
   # ── Job 1: Build images and push to private registry ──────────────
@@ -43,6 +44,19 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
+          platforms: linux/amd64
+
+      # ── Nginx proxy ────────────────────────────────────────────────
+      - name: Build and push nginx proxy
+        uses: docker/build-push-action@v5
+        with:
+          context: ./deployment/nginx
+          push: true
+          tags: |
+            ${{ env.NGINX_IMAGE }}:latest
+            ${{ env.NGINX_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,scope=nginx,mode=max
           platforms: linux/amd64
 
       # ── Frontend ───────────────────────────────────────────────────
