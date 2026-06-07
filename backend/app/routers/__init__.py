@@ -1062,6 +1062,30 @@ def mark_all_read(current_user: User = Depends(get_current_user), db: Session = 
     return {"status": "ok"}
 
 
+@notifications_router.post("/simulate")
+def simulate_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Inject sample notifications for the current user — for testing only."""
+    samples = [
+        {"type": "rfq_received",    "title": "New RFQ received",         "body": "Vendor ACME submitted a quotation for Project Alpha."},
+        {"type": "quote_submitted",  "title": "Quotation submitted",      "body": "Vendor Beta Corp submitted pricing for RFQ #1042."},
+        {"type": "po_raised",        "title": "Purchase Order raised",    "body": "PO #2001 has been raised and sent to vendor."},
+        {"type": "approval_needed",  "title": "Approval required",        "body": "Invoice #INV-305 is awaiting your approval."},
+        {"type": "requirement_due",  "title": "Requirement deadline soon","body": "Requirement 'Server Hardware Q3' is due in 2 days."},
+    ]
+    for s in samples:
+        _notify(
+            db,
+            org_id=current_user.org_id,
+            user_id=current_user.id,
+            project_id=None,
+            type=s["type"],
+            title=s["title"],
+            body=s["body"],
+        )
+    db.commit()
+    return {"created": len(samples), "message": "Sample notifications injected."}
+
+
 # ── Analytics router ───────────────────────────────────────────────
 
 analytics_router = APIRouter(prefix="/analytics", tags=["analytics"])
