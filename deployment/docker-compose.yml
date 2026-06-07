@@ -56,9 +56,9 @@ services:
       FRONTEND_URL:    http://localhost:8080
       ENVIRONMENT:     production
       DEBUG:           "false"
-      MINIO_ENDPOINT:  ""
     volumes:
       - sqlite_data:/data
+      - uploads_data:/app/uploads
     networks:
       - procurelink_net
     restart: unless-stopped
@@ -75,3 +75,4 @@ networks:
 
 volumes:
   sqlite_data:
+  uploads_data:

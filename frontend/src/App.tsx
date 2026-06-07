@@ -31,7 +31,6 @@ import QuotationsListPage from '@/pages/quotations/QuotationsListPage'
 import QuotationEditorPage from '@/pages/quotations/QuotationEditorPage'
 import InvoicesListPage from '@/pages/invoices/InvoicesListPage'
 import InvoiceEditorPage from '@/pages/invoices/InvoiceEditorPage'
-import StoragePage from '@/pages/settings/StoragePage'
 import DashboardPage from '@/pages/projects/DashboardPage'
 import PurchaseOrdersListPage from '@/pages/procurement/PurchaseOrdersListPage'
 
@@ -115,11 +114,6 @@ function LeftSidebar() {
           Customers
         </NavLink>
 
-        <p className={section}>System</p>
-        <NavLink to="/settings/storage" className={linkCls}>
-          <Settings className="w-4 h-4 flex-shrink-0" />
-          Storage
-        </NavLink>
       </nav>
 
       {/* User footer */}
@@ -191,7 +185,6 @@ export default function App() {
                       <Route path="/invoices" element={<InvoicesListPage />} />
                       <Route path="/invoices/:id" element={<InvoiceEditorPage />} />
                       <Route path="/purchase-orders" element={<PurchaseOrdersListPage />} />
-                      <Route path="/settings/storage" element={<StoragePage />} />
                     </Routes>
                   </AppLayout>
                 </PrivateRoute>

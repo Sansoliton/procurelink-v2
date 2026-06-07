@@ -1,6 +1,8 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -102,6 +104,10 @@ app.include_router(cinvoices_router)
 app.include_router(logos_router)
 app.include_router(org_router)
 app.include_router(delivery_notes_router)
+
+# Serve uploaded files — mount after routes so /files/* doesn't shadow anything
+os.makedirs(settings.upload_dir, exist_ok=True)
+app.mount("/files", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 @app.get("/")
 def root():

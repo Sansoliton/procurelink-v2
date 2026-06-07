@@ -430,47 +430,22 @@ async def upload_requirement_file(
     if not req:
         raise HTTPException(404, "Requirement not found")
 
+    import os
     from app.config import settings
-    import boto3
-    from botocore.exceptions import BotoCoreError, ClientError
 
-    object_name = f"requirements/{req_id}/{file.filename}"
-    try:
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"http{'s' if settings.minio_secure else ''}://{settings.minio_endpoint}",
-            aws_access_key_id=settings.minio_access_key,
-            aws_secret_access_key=settings.minio_secret_key,
-        )
-        # Ensure bucket exists
-        try:
-            s3.head_bucket(Bucket=settings.minio_bucket)
-        except ClientError:
-            s3.create_bucket(Bucket=settings.minio_bucket)
+    safe_name = os.path.basename(file.filename or "file")
+    dest_dir = os.path.join(settings.upload_dir, "requirements", req_id)
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_path = os.path.join(dest_dir, safe_name)
+    content = await file.read()
+    with open(dest_path, "wb") as fout:
+        fout.write(content)
 
-        content = await file.read()
-        s3.put_object(
-            Bucket=settings.minio_bucket,
-            Key=object_name,
-            Body=content,
-            ContentType=file.content_type or "application/octet-stream",
-        )
-        url = f"http{'s' if settings.minio_secure else ''}://{settings.minio_endpoint}/{settings.minio_bucket}/{object_name}"
-    except (BotoCoreError, ClientError, Exception) as exc:
-        log.warning("MinIO upload failed: %s", exc)
-        # Fallback: store locally under /tmp for dev
-        import os
-        os.makedirs(f"/tmp/uploads/requirements/{req_id}", exist_ok=True)
-        local_path = f"/tmp/uploads/requirements/{req_id}/{file.filename}"
-        content = await file.read() if not content else content
-        with open(local_path, "wb") as f_out:
-            f_out.write(content)
-        url = f"/uploads/requirements/{req_id}/{file.filename}"
-        object_name = local_path
-
-    req.file_path = object_name
+    rel_path = f"requirements/{req_id}/{safe_name}"
+    url = f"/api/files/{rel_path}"
+    req.file_path = rel_path
     db.commit()
-    return {"file_path": object_name, "url": url}
+    return {"file_path": rel_path, "url": url}
 
 
 # ── RFQ router ─────────────────────────────────────────────────────
@@ -1239,50 +1214,22 @@ async def upload_customer_logo(
     if not c:
         raise HTTPException(404, "Customer not found")
 
+    import os
+    from app.config import settings as cfg
+
     content = await file.read()
     fname = file.filename or "logo.png"
     ext = fname.rsplit(".", 1)[-1].lower()
     safe_ext = ext if ext in {"png", "jpg", "jpeg", "gif", "webp", "svg"} else "png"
-    object_key = f"logos/customers/{customer_id}.{safe_ext}"
-    content_type = file.content_type or mimetypes.guess_type(fname)[0] or "image/png"
-
-    # If MinIO is not configured, fall back to base64 data URL stored in DB
-    if not cfg.minio_endpoint:
-        import base64
-        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
-        c.logo_url = data_url
-        db.commit()
-        return {"url": data_url}
-
-    try:
-        import boto3
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"http{'s' if cfg.minio_secure else ''}://{cfg.minio_endpoint}",
-            aws_access_key_id=cfg.minio_access_key,
-            aws_secret_access_key=cfg.minio_secret_key,
-        )
-        try:
-            s3.head_bucket(Bucket=cfg.minio_bucket)
-        except Exception:
-            s3.create_bucket(Bucket=cfg.minio_bucket)
-        s3.put_object(
-            Bucket=cfg.minio_bucket,
-            Key=object_key,
-            Body=content,
-            ContentType=content_type,
-        )
-        url = f"{cfg.minio_public_url.rstrip('/')}/{cfg.minio_bucket}/{object_key}"
-        c.logo_url = url
-        db.commit()
-        return {"url": url}
-    except Exception as exc:
-        log.warning("MinIO customer logo upload failed: %s", exc)
-        import base64
-        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
-        c.logo_url = data_url
-        db.commit()
-        return {"url": data_url}
+    rel_path = f"logos/customers/{customer_id}.{safe_ext}"
+    dest_path = os.path.join(cfg.upload_dir, rel_path)
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    with open(dest_path, "wb") as fout:
+        fout.write(content)
+    url = f"/api/files/{rel_path}"
+    c.logo_url = url
+    db.commit()
+    return {"url": url}
 
 
 # ── Customer Quotations router (sales-side) ────────────────────────
@@ -1392,41 +1339,21 @@ async def upload_cquote_attachment(
     if not cq:
         raise HTTPException(404, "Not found")
 
+    import os
+    from app.config import settings as cfg
+
     content = await file.read()
     fname = file.filename or "file"
     content_type = file.content_type or mimetypes.guess_type(fname)[0] or "application/octet-stream"
     ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else "bin"
     file_id = str(uuid.uuid4())
-    object_key = f"attachments/cquotes/{cq_id}/{file_id}.{ext}"
-
-    if not cfg.minio_endpoint:
-        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
-        return {"url": data_url, "filename": fname, "content_type": content_type, "file_id": file_id}
-
-    try:
-        import boto3
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"http{'s' if cfg.minio_secure else ''}://{cfg.minio_endpoint}",
-            aws_access_key_id=cfg.minio_access_key,
-            aws_secret_access_key=cfg.minio_secret_key,
-        )
-        try:
-            s3.head_bucket(Bucket=cfg.minio_bucket)
-        except Exception:
-            s3.create_bucket(Bucket=cfg.minio_bucket)
-        s3.put_object(
-            Bucket=cfg.minio_bucket,
-            Key=object_key,
-            Body=content,
-            ContentType=content_type,
-        )
-        url = f"{cfg.minio_public_url.rstrip('/')}/{cfg.minio_bucket}/{object_key}"
-        return {"url": url, "filename": fname, "content_type": content_type, "file_id": file_id}
-    except Exception as exc:
-        log.warning("MinIO cquote attachment upload failed: %s", exc)
-        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
-        return {"url": data_url, "filename": fname, "content_type": content_type, "file_id": file_id}
+    rel_path = f"attachments/cquotes/{cq_id}/{file_id}.{ext}"
+    dest_path = os.path.join(cfg.upload_dir, rel_path)
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    with open(dest_path, "wb") as fout:
+        fout.write(content)
+    url = f"/api/files/{rel_path}"
+    return {"url": url, "filename": fname, "content_type": content_type, "file_id": file_id}
 
 
 @cquotes_router.delete("/{cq_id}")
@@ -1609,48 +1536,20 @@ async def upload_logo(
     import mimetypes
     from app.config import settings as cfg
 
+    import os
+    from app.config import settings as cfg
+
     content = await file.read()
     fname = file.filename or "logo.png"
     ext = fname.rsplit(".", 1)[-1].lower()
     safe_ext = ext if ext in _ALLOWED_LOGO_EXTS else "png"
-    object_key = f"logos/{current_user.org_id}/{uuid.uuid4()}.{safe_ext}"
-    content_type = (
-        file.content_type
-        or mimetypes.guess_type(fname)[0]
-        or "image/png"
-    )
-
-    # If MinIO is not configured, fall back to base64 data URL
-    if not cfg.minio_endpoint:
-        import base64
-        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
-        return {"url": data_url}
-
-    try:
-        import boto3
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"http{'s' if cfg.minio_secure else ''}://{cfg.minio_endpoint}",
-            aws_access_key_id=cfg.minio_access_key,
-            aws_secret_access_key=cfg.minio_secret_key,
-        )
-        try:
-            s3.head_bucket(Bucket=cfg.minio_bucket)
-        except Exception:
-            s3.create_bucket(Bucket=cfg.minio_bucket)
-        s3.put_object(
-            Bucket=cfg.minio_bucket,
-            Key=object_key,
-            Body=content,
-            ContentType=content_type,
-        )
-        url = f"{cfg.minio_public_url.rstrip('/')}/{cfg.minio_bucket}/{object_key}"
-        return {"url": url}
-    except Exception as exc:
-        log.warning("MinIO logo upload failed: %s", exc)
-        import base64
-        data_url = f"data:{content_type};base64,{base64.b64encode(content).decode()}"
-        return {"url": data_url}
+    rel_path = f"logos/{current_user.org_id}/{uuid.uuid4()}.{safe_ext}"
+    dest_path = os.path.join(cfg.upload_dir, rel_path)
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    with open(dest_path, "wb") as fout:
+        fout.write(content)
+    url = f"/api/files/{rel_path}"
+    return {"url": url}
 
 
 # ── Org settings router ────────────────────────────────────────────

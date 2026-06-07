@@ -75,7 +75,8 @@ services:
       FRONTEND_URL:    ${APP_URL:-http://localhost}
       ENVIRONMENT:     production
       DEBUG:           "false"
-      MINIO_ENDPOINT:  ""
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -125,3 +126,4 @@ networks:
 
 volumes:
   postgres_data:
+  uploads_data:

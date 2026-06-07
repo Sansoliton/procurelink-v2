@@ -151,25 +151,13 @@ def generate_pdf_task(self, doc_type: str, doc_id: str, org_id: str):
                 c.save()
                 buf.seek(0)
 
-                object_name = f"pdfs/pos/{doc_id}.pdf"
-                s3 = boto3.client(
-                    "s3",
-                    endpoint_url=f"http{'s' if settings.minio_secure else ''}://{settings.minio_endpoint}",
-                    aws_access_key_id=settings.minio_access_key,
-                    aws_secret_access_key=settings.minio_secret_key,
-                )
-                try:
-                    s3.head_bucket(Bucket=settings.minio_bucket)
-                except Exception:
-                    s3.create_bucket(Bucket=settings.minio_bucket)
-                s3.put_object(
-                    Bucket=settings.minio_bucket,
-                    Key=object_name,
-                    Body=buf.read(),
-                    ContentType="application/pdf",
-                )
-                public_url = f"{settings.minio_public_url.rstrip('/')}/{settings.minio_bucket}/{object_name}"
-                # Store pdf_url back on the PO record
+                import os
+                rel_path = f"pdfs/pos/{doc_id}.pdf"
+                dest = os.path.join(settings.upload_dir, rel_path)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with open(dest, "wb") as fout:
+                    fout.write(buf.read())
+                public_url = f"/api/files/{rel_path}"
                 po.pdf_url = public_url
                 db.commit()
                 return public_url
@@ -254,26 +242,13 @@ def generate_pdf_task(self, doc_type: str, doc_id: str, org_id: str):
             c.save()
             buf.seek(0)
 
-            object_name = f"pdfs/{doc_type}s/{doc_id}.pdf"
-            s3 = boto3.client(
-                "s3",
-                endpoint_url=f"http{'s' if settings.minio_secure else ''}://{settings.minio_endpoint}",
-                aws_access_key_id=settings.minio_access_key,
-                aws_secret_access_key=settings.minio_secret_key,
-            )
-            try:
-                s3.head_bucket(Bucket=settings.minio_bucket)
-            except Exception:
-                s3.create_bucket(Bucket=settings.minio_bucket)
-            s3.put_object(
-                Bucket=settings.minio_bucket,
-                Key=object_name,
-                Body=buf.read(),
-                ContentType="application/pdf",
-            )
-            public_url = f"{settings.minio_public_url.rstrip('/')}/{settings.minio_bucket}/{object_name}"
-
-            # Write URL back to the DB record
+            import os
+            rel_path = f"pdfs/{doc_type}s/{doc_id}.pdf"
+            dest = os.path.join(settings.upload_dir, rel_path)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "wb") as fout:
+                fout.write(buf.read())
+            public_url = f"/api/files/{rel_path}"
             doc.pdf_url = public_url
             db.commit()
             return public_url
