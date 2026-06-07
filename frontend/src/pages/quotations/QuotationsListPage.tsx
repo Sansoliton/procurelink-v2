@@ -175,7 +175,7 @@ export default function QuotationsListPage() {
 
   const totalValue = quotations.reduce((s, q) => s + (q.total_amount ?? 0), 0)
   const poApproved = quotations.filter(q => ['po_received', 'invoiced', 'complete'].includes(q.status))
-  const poApprovedValue = poApproved.reduce((s, q) => s + (q.total_amount ?? 0), 0)
+  const poApprovedValue = poApproved.reduce((s, q) => s + ((q.doc_data as any)?.poAgreedAmount ?? q.total_amount ?? 0), 0)
   const inProgress = quotations.filter(q => ['draft', 'shared', 'acknowledged', 'final'].includes(q.status))
   const inProgressValue = inProgress.reduce((s, q) => s + (q.total_amount ?? 0), 0)
 
@@ -228,7 +228,7 @@ export default function QuotationsListPage() {
             <div className="min-w-0">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">PO Received / Won</p>
               <p className="text-lg font-bold text-green-700 mt-0.5">AED {fmt(poApprovedValue)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{poApproved.length} quotation{poApproved.length !== 1 ? 's' : ''} · PO Received / Invoiced / Complete</p>
+              <p className="text-xs text-gray-400 mt-0.5">{poApproved.length} quotation{poApproved.length !== 1 ? 's' : ''} · Agreed value</p>
             </div>
           </div>
         </div>
@@ -309,7 +309,8 @@ export default function QuotationsListPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Type</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Customer</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount (AED)</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Quoted (AED)</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Agreed (AED)</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Stage</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">PO</th>
                 <th className="px-4 py-3" />
@@ -374,6 +375,26 @@ export default function QuotationsListPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">
                     {(q.total_amount ?? 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {(() => {
+                      const agreed = (q.doc_data as any)?.poAgreedAmount as number | undefined
+                      if (!agreed) return <span className="text-gray-300">—</span>
+                      const diff = agreed - (q.total_amount ?? 0)
+                      const pct  = q.total_amount ? (diff / q.total_amount) * 100 : 0
+                      return (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="font-semibold text-green-700">
+                            {agreed.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          {diff !== 0 && (
+                            <span className={`text-[10px] font-medium ${diff < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                              {diff < 0 ? '▼' : '▲'} {Math.abs(pct).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex flex-col items-center gap-1">
