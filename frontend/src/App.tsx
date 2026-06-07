@@ -2,8 +2,11 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 're
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import {
   Bell, LogOut, Package,
-  Building2, Receipt, ClipboardList, Settings, FolderOpen, ShoppingCart,
+  Building2, Receipt, ClipboardList, ShoppingCart,
 } from 'lucide-react'
+
+const FEATURE_INVOICES = import.meta.env.VITE_FEATURE_INVOICES === 'true'
+const FEATURE_PO       = import.meta.env.VITE_FEATURE_PO       === 'true'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ProjectProvider } from '@/context/ProjectContext'
 import { notificationsApi } from '@/api'
@@ -95,14 +98,18 @@ function LeftSidebar() {
           <Receipt className="w-4 h-4 flex-shrink-0" />
           Quotations
         </NavLink>
-        <NavLink to="/purchase-orders" className={linkCls}>
-          <ShoppingCart className="w-4 h-4 flex-shrink-0" />
-          Purchase Orders
-        </NavLink>
-        <NavLink to="/invoices" className={linkCls}>
-          <ClipboardList className="w-4 h-4 flex-shrink-0" />
-          Invoices
-        </NavLink>
+        {FEATURE_PO && (
+          <NavLink to="/purchase-orders" className={linkCls}>
+            <ShoppingCart className="w-4 h-4 flex-shrink-0" />
+            Purchase Orders
+          </NavLink>
+        )}
+        {FEATURE_INVOICES && (
+          <NavLink to="/invoices" className={linkCls}>
+            <ClipboardList className="w-4 h-4 flex-shrink-0" />
+            Invoices
+          </NavLink>
+        )}
 
         <p className={section}>Procurement</p>
         <NavLink to="/vendors" className={linkCls}>
@@ -182,9 +189,9 @@ export default function App() {
                       <Route path="/quotations" element={<QuotationsListPage />} />
                       <Route path="/quotations/new" element={<QuotationEditorPage />} />
                       <Route path="/quotations/:id" element={<QuotationEditorPage />} />
-                      <Route path="/invoices" element={<InvoicesListPage />} />
-                      <Route path="/invoices/:id" element={<InvoiceEditorPage />} />
-                      <Route path="/purchase-orders" element={<PurchaseOrdersListPage />} />
+                      {FEATURE_INVOICES && <Route path="/invoices" element={<InvoicesListPage />} />}
+                      {FEATURE_INVOICES && <Route path="/invoices/:id" element={<InvoiceEditorPage />} />}
+                      {FEATURE_PO && <Route path="/purchase-orders" element={<PurchaseOrdersListPage />} />}
                     </Routes>
                   </AppLayout>
                 </PrivateRoute>

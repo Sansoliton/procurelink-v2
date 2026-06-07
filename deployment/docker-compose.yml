@@ -32,7 +32,9 @@ services:
     build:
       context: ../frontend
       args:
-        VITE_API_URL: /api
+        VITE_API_URL:          /api
+        VITE_FEATURE_INVOICES: "false"
+        VITE_FEATURE_PO:       "false"
     container_name: pl_frontend
     networks:
       - procurelink_net

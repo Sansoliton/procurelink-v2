@@ -7,7 +7,11 @@ COPY . .
 # VITE_API_URL is injected at build time so the SPA knows where the backend is.
 # Pass it via: docker build --build-arg VITE_API_URL=https://... ./frontend
 ARG VITE_API_URL
+ARG VITE_FEATURE_INVOICES=false
+ARG VITE_FEATURE_PO=false
 ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_FEATURE_INVOICES=${VITE_FEATURE_INVOICES}
+ENV VITE_FEATURE_PO=${VITE_FEATURE_PO}
 RUN npm run build
 
 # ── Stage 2: Serve ───────────────────────────────────────────────
