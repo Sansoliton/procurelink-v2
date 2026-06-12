@@ -1524,6 +1524,15 @@ export default function QuotationEditorPage() {
   const [uploading, setUploading] = useState(false)
   const [poUploading, setPoUploading] = useState(false)
   const [filesUploading, setFilesUploading] = useState(false)
+  // Sidebar PO form state (used in PO tab for entering PO details)
+  const [showSidebarPoForm, setShowSidebarPoForm] = useState(false)
+  const [sidebarPoInput, setSidebarPoInput] = useState('')
+  const [sidebarPoDate, setSidebarPoDate] = useState('')
+  const [sidebarPoDueDate, setSidebarPoDueDate] = useState('')
+  const [sidebarPoAgreed, setSidebarPoAgreed] = useState('')
+  const [sidebarPoFile, setSidebarPoFile] = useState<string>('')
+  const [sidebarPoUploading, setSidebarPoUploading] = useState(false)
+  const sidebarPoFileRef = useRef<HTMLInputElement>(null)
   const [viewer, setViewer] = useState<{ url: string; title: string; blobUrl?: string } | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
   const apiDocLoaded = useRef(false)   // guard: don't overwrite user edits with stale API response
@@ -1721,6 +1730,54 @@ export default function QuotationEditorPage() {
     setDoc(next)
     setSaved(false)
     handleSave(next)
+  }
+
+  async function handleSidebarPOFileChange(file: File) {
+    setSidebarPoUploading(true)
+    try {
+      let url: string
+      if (apiId) {
+        try {
+          const res = await cquotesApi.uploadFile(apiId, file)
+          url = res.url
+        } catch {
+          url = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+        }
+      } else {
+        url = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+      }
+      setSidebarPoFile(url)
+    } catch { /* silent */ }
+    finally { setSidebarPoUploading(false) }
+  }
+
+  function handleSidebarSavePO() {
+    const agreed = parseFloat(sidebarPoAgreed.replace(/,/g, ''))
+    handleAdvance({
+      status: 'po_received',
+      poNumber: sidebarPoInput,
+      poDate: sidebarPoDate,
+      poDueDate: sidebarPoDueDate || undefined,
+      poAgreedAmount: !isNaN(agreed) && agreed > 0 ? agreed : undefined,
+      poAttachment: sidebarPoFile || undefined,
+      poReceivedDate: new Date().toISOString().slice(0, 10),
+    })
+    setShowSidebarPoForm(false)
+    setSidebarPoInput('')
+    setSidebarPoDate('')
+    setSidebarPoDueDate('')
+    setSidebarPoAgreed('')
+    setSidebarPoFile('')
   }
 
   async function handleGenerateInvoice() {
@@ -2747,6 +2804,145 @@ export default function QuotationEditorPage() {
                     </div>
                   </div>
 
+                  {/* ── Shared / Acknowledged: show quotation PDF + PO entry form ── */}
+                  {(doc.status === 'shared' || doc.status === 'acknowledged') && (
+                    <>
+                      {/* Quotation PDF preview */}
+                      <div className="border border-blue-100 rounded-lg p-2.5 bg-blue-50 space-y-1.5">
+                        <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">Quotation PDF</p>
+                        <button
+                          onClick={async () => {
+                            if (!apiId) { openViewer('', '') ; return }
+                            try {
+                              const { pdf_url } = await cquotesApi.getPdf(apiId)
+                              if (pdf_url) openViewer(pdf_url, `Quotation ${doc.quotationNo}`)
+                            } catch { /* not ready */ }
+                          }}
+                          disabled={!apiId}
+                          className="w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-blue-300 text-blue-600 rounded-lg py-2 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          View Quotation PDF
+                        </button>
+                      </div>
+
+                      {/* Add PO details form */}
+                      {!showSidebarPoForm ? (
+                        <button
+                          onClick={() => {
+                            setShowSidebarPoForm(true)
+                            setSidebarPoInput(doc.poNumber ?? '')
+                            setSidebarPoDate(doc.poDate ?? '')
+                            setSidebarPoDueDate(doc.poDueDate ?? '')
+                            setSidebarPoAgreed(doc.poAgreedAmount != null ? String(doc.poAgreedAmount) : '')
+                            setSidebarPoFile(doc.poAttachment ?? '')
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-orange-300 text-orange-600 rounded-lg py-2 hover:bg-orange-50 transition-colors"
+                        >
+                          <FileCheck className="w-3.5 h-3.5" />
+                          Add PO Details
+                        </button>
+                      ) : (
+                        <div className="border border-orange-200 rounded-lg p-3 bg-orange-50/40 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold text-gray-700">PO Details</p>
+                            <button onClick={() => setShowSidebarPoForm(false)} className="text-gray-400 hover:text-gray-600">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 font-medium">PO Number *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. PO-12345"
+                              value={sidebarPoInput}
+                              onChange={e => setSidebarPoInput(e.target.value)}
+                              className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-orange-400 bg-white mt-0.5"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-gray-500 font-medium">PO Date</label>
+                              <input
+                                type="date"
+                                value={sidebarPoDate}
+                                onChange={e => setSidebarPoDate(e.target.value)}
+                                className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-orange-400 bg-white mt-0.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 font-medium">Due Date</label>
+                              <input
+                                type="date"
+                                value={sidebarPoDueDate}
+                                onChange={e => setSidebarPoDueDate(e.target.value)}
+                                className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-orange-400 bg-white mt-0.5"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 font-medium">Agreed PO Value (AED)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder={`Quoted: ${grandTotal.toFixed(2)}`}
+                              value={sidebarPoAgreed}
+                              onChange={e => setSidebarPoAgreed(e.target.value)}
+                              className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-orange-400 bg-white mt-0.5"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 font-medium">PO Document</label>
+                            <input
+                              ref={sidebarPoFileRef}
+                              type="file"
+                              accept=".pdf,image/*"
+                              className="hidden"
+                              disabled={sidebarPoUploading}
+                              onChange={e => { if (e.target.files?.[0]) handleSidebarPOFileChange(e.target.files[0]) }}
+                            />
+                            <button
+                              onClick={() => sidebarPoFileRef.current?.click()}
+                              disabled={sidebarPoUploading}
+                              className={`w-full flex items-center justify-center gap-1.5 text-xs border rounded-lg py-1.5 mt-0.5 transition-colors ${
+                                sidebarPoFile
+                                  ? 'border-green-400 bg-green-50 text-green-700'
+                                  : 'border-dashed border-gray-300 text-gray-500 hover:border-orange-400 hover:text-orange-600'
+                              } disabled:opacity-50`}
+                            >
+                              <Paperclip className="w-3.5 h-3.5" />
+                              {sidebarPoUploading ? 'Uploading…' : sidebarPoFile ? 'File attached ✓' : 'Attach PO file'}
+                            </button>
+                            {sidebarPoFile && (
+                              <button
+                                onClick={() => setSidebarPoFile('')}
+                                className="text-[10px] text-red-400 hover:text-red-600 mt-0.5"
+                              >
+                                Remove file
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={handleSidebarSavePO}
+                              disabled={!sidebarPoInput.trim()}
+                              className="flex-1 text-xs bg-orange-600 text-white rounded-md py-1.5 disabled:opacity-50 hover:bg-orange-700 transition-colors font-medium"
+                            >
+                              Save PO
+                            </button>
+                            <button
+                              onClick={() => setShowSidebarPoForm(false)}
+                              className="flex-1 text-xs border border-gray-200 rounded-md py-1.5 hover:bg-gray-100 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
                   {doc.poNumber ? (
                     <div className="border border-orange-100 rounded-lg p-3 bg-orange-50 space-y-2">
                       <div className="flex items-center gap-2">
@@ -2825,7 +3021,7 @@ export default function QuotationEditorPage() {
                         )
                       })()}
                     </div>
-                  ) : (
+                  ) : (doc.status !== 'shared' && doc.status !== 'acknowledged') && (
                     <p className="text-xs text-gray-400 text-center py-2">
                       No PO received yet.<br />
                       Advance to &ldquo;PO Received&rdquo; status to attach a PO number.
@@ -2867,12 +3063,76 @@ export default function QuotationEditorPage() {
                         </div>
                       </div>
                     </div>
-                  ) : (
+                  ) : doc.poNumber ? (
                     <label className={`w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-orange-300 text-orange-600 rounded-lg py-2 hover:bg-orange-50 transition-colors cursor-pointer ${poUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       <Upload className="w-3.5 h-3.5" />
                       {poUploading ? 'Uploading…' : 'Upload PO Document'}
                       <input type="file" accept=".pdf,image/*" className="hidden" disabled={poUploading} onChange={e => { if (e.target.files?.[0]) handlePOUpload(e.target.files[0]) }} />
                     </label>
+                  ) : null}
+
+                  {/* ── Invoiced: invoice upload section ── */}
+                  {doc.status === 'invoiced' && (
+                    <div className="border border-teal-100 rounded-lg p-3 bg-teal-50/50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
+                        <p className="text-xs font-semibold text-teal-700">Invoice</p>
+                      </div>
+                      {doc.invoiceId ? (
+                        <button
+                          onClick={() => nav(`/invoices/${doc.invoiceId}`)}
+                          className="w-full flex items-center justify-center gap-1.5 text-xs text-teal-700 border border-teal-300 rounded-lg py-2 hover:bg-teal-100 transition-colors font-medium"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View Invoice
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => {
+                          setUploadModal(true)
+                          setUploadError('')
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-teal-300 text-teal-600 rounded-lg py-2 hover:bg-teal-100 transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        Upload Invoice
+                      </button>
+                      {uploadModal && (
+                        <div className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
+                          <p className="text-xs font-semibold text-gray-600">Attach Invoice</p>
+                          <input
+                            type="text"
+                            placeholder="Invoice No. (e.g. INV26/0001)"
+                            value={uploadInvoiceNo}
+                            onChange={e => setUploadInvoiceNo(e.target.value)}
+                            className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+                          />
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-1.5 bg-white hover:bg-gray-50 transition-colors">
+                            <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="truncate">{uploadFile ? uploadFile.name : 'Choose PDF / Image'}</span>
+                            <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                          {uploadError && (
+                            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">{uploadError}</p>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleUploadInvoice}
+                              disabled={uploading || !uploadFile || !uploadInvoiceNo.trim()}
+                              className="flex-1 text-xs bg-teal-600 text-white rounded-md py-1.5 disabled:opacity-50 hover:bg-teal-700 transition-colors"
+                            >
+                              {uploading ? 'Saving…' : 'Save'}
+                            </button>
+                            <button
+                              onClick={() => { setUploadModal(false); setUploadFile(null); setUploadInvoiceNo('') }}
+                              className="flex-1 text-xs border border-gray-200 rounded-md py-1.5 hover:bg-gray-100 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
