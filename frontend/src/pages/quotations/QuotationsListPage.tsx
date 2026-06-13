@@ -1,7 +1,11 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, Trash2, Edit2, Search, CheckCircle2, Clock, DollarSign, Paperclip, Download, AlertTriangle } from 'lucide-react'
+import {
+  Plus, FileText, Trash2, Eye, Search, CheckCircle2, Clock,
+  DollarSign, Paperclip, AlertTriangle, LayoutGrid, List,
+  FileCheck, Receipt, Truck, ChevronRight, Download, Edit2,
+} from 'lucide-react'
 import { Button, Badge, EmptyState } from '@/components/ui'
 import PDFViewerModal from '@/components/PDFViewerModal'
 import { formatDate } from '@/lib/utils'
@@ -9,6 +13,270 @@ import { readData } from '@/lib/storage'
 import { cquotesApi } from '@/api'
 import type { CustomerQuotation } from '@/types'
 import type { QuotationStatus, QuotationType, QuotationTag } from './QuotationEditorPage'
+
+function openDataUrl(dataUrl: string) {
+  try {
+    if (dataUrl.startsWith('data:')) {
+      const [header, b64] = dataUrl.split(',')
+      const mime = header.match(/:(.*?);/)?.[1] ?? 'application/pdf'
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), '_blank')
+    } else {
+      window.open(dataUrl, '_blank')
+    }
+  } catch { /* ignore */ }
+}
+
+const TYPE_LABEL: Record<QuotationType, string> = {
+  quotation: 'Quotation',
+  proforma:  'Proforma',
+  service:   'Service Q.',
+  dummy:     'Dummy',
+}
+
+const TAG_STYLE: Record<QuotationTag, string> = {
+  active:   '',
+  dummy_po: 'bg-amber-100 text-amber-700',
+  rejected: 'bg-red-100 text-red-700',
+}
+const TAG_LABEL: Record<QuotationTag, string> = { active: '', dummy_po: 'Dummy PO', rejected: 'Rejected' }
+
+const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'purple'> = {
+  draft: 'gray', shared: 'blue', acknowledged: 'purple',
+  po_received: 'amber', invoiced: 'blue', complete: 'green',
+}
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Draft', shared: 'Shared', acknowledged: 'Acknowledged',
+  po_received: 'PO Received', invoiced: 'Invoiced', complete: 'Complete',
+}
+
+const WORKFLOW_STEPS: { key: QuotationStatus; label: string }[] = [
+  { key: 'draft',       label: 'Draft' },
+  { key: 'shared',      label: 'Shared' },
+  { key: 'po_received', label: 'PO Received' },
+  { key: 'invoiced',    label: 'Invoiced' },
+  { key: 'complete',    label: 'Complete' },
+]
+
+function stepIndex(status: string): number {
+  const idx = WORKFLOW_STEPS.findIndex(s => s.key === status)
+  return idx < 0 ? 0 : idx
+}
+
+function relativeAge(dateStr: string): string {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
+
+function loadAlertSettings() {
+  try {
+    const p = JSON.parse(readData('pl_company_profile') ?? '{}')
+    return { alertDaysBeforeExpiry: Number(p.alertDaysBeforeExpiry ?? 7), alertStaleDays: Number(p.alertStaleDays ?? 14) }
+  } catch { return { alertDaysBeforeExpiry: 7, alertStaleDays: 14 } }
+}
+
+type AlertLevel = 'overdue' | 'expiring' | 'stale' | null
+
+function getAlertLevel(q: CustomerQuotation, s: ReturnType<typeof loadAlertSettings>): AlertLevel {
+  if (['complete', 'rejected'].includes(q.status)) return null
+  const dd = q.doc_data as any
+  const docDate = dd?.date ?? q.created_at
+  const validDays = dd?.validityDays as number | undefined
+  if (validDays && docDate) {
+    const daysLeft = Math.ceil((new Date(docDate).getTime() + validDays * 86_400_000 - Date.now()) / 86_400_000)
+    if (daysLeft < 0) return 'overdue'
+    if (daysLeft <= s.alertDaysBeforeExpiry) return 'expiring'
+  }
+  const daysSince = Math.floor((Date.now() - new Date(q.created_at).getTime()) / 86_400_000)
+  if (['draft', 'shared', 'acknowledged'].includes(q.status) && daysSince >= s.alertStaleDays) return 'stale'
+  return null
+}
+
+const ALERT_CHIP: Record<NonNullable<AlertLevel>, { label: string; cls: string }> = {
+  overdue:  { label: 'Overdue',       cls: 'bg-red-100 text-red-700' },
+  expiring: { label: 'Expiring soon', cls: 'bg-amber-100 text-amber-700' },
+  stale:    { label: 'No progress',   cls: 'bg-yellow-100 text-yellow-700' },
+}
+
+// ── Mini workflow progress bar ─────────────────────────────────────
+function MiniProgress({ status }: { status: string }) {
+  const cur = stepIndex(status)
+  return (
+    <div className="flex items-center mt-2 mb-1">
+      {WORKFLOW_STEPS.map((step, i) => {
+        const done = i < cur
+        const active = i === cur
+        const last = i === WORKFLOW_STEPS.length - 1
+        return (
+          <div key={step.key} className="flex items-center flex-1 min-w-0">
+            <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+              <div className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
+                done ? 'bg-green-500 border-green-500' :
+                active ? 'bg-blue-600 border-blue-600' :
+                'bg-white border-gray-300'
+              }`} />
+              <span className={`text-[8px] font-medium whitespace-nowrap ${
+                done ? 'text-green-600' : active ? 'text-blue-600' : 'text-gray-400'
+              }`}>{step.label}</span>
+            </div>
+            {!last && (
+              <div className={`h-0.5 flex-1 mx-0.5 mb-3 ${done ? 'bg-green-400' : 'bg-gray-200'}`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Doc badge pills ────────────────────────────────────────────────
+function DocBadge({ icon: Icon, label, onClick, color }: {
+  icon: React.ElementType; label: string; onClick?: () => void; color: string
+}) {
+  const cls = `inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors ${color}`
+  if (onClick) return <button onClick={onClick} className={cls + ' hover:opacity-80'}><Icon className="w-2.5 h-2.5" />{label}</button>
+  return <span className={cls}><Icon className="w-2.5 h-2.5" />{label}</span>
+}
+
+// ── Quotation Gallery Card ─────────────────────────────────────────
+function QuotationCard({
+  q, alert, onView, onEdit, onDelete, onViewPO, onViewInvoice,
+}: {
+  q: CustomerQuotation
+  alert: AlertLevel
+  onView: () => void
+  onEdit: () => void
+  onDelete: (e: React.MouseEvent) => void
+  onViewPO: () => void
+  onViewInvoice: () => void
+}) {
+  const dd = q.doc_data as any
+  const hasPOFile = !!dd?.poAttachment
+  const hasInvoiceFile = !!dd?.invoiceAttachment
+  const invoiceNo = dd?.invoiceNo as string | undefined
+  const poNumber = dd?.poNumber as string | undefined
+  const qType = dd?.quotationType as QuotationType | undefined
+  const tag = dd?.quotationTag as QuotationTag | undefined
+
+  const alertBorder = alert === 'overdue' ? 'border-l-4 border-l-red-400' :
+    alert === 'expiring' ? 'border-l-4 border-l-amber-400' :
+    alert === 'stale' ? 'border-l-4 border-l-yellow-400' : ''
+
+  return (
+    <div
+      className={`bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group ${alertBorder}`}
+      onClick={onView}
+    >
+      {/* Card header */}
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-mono font-bold text-blue-700 text-sm">{q.quotation_no}</span>
+              {qType && qType !== 'quotation' && (
+                <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">{TYPE_LABEL[qType]}</span>
+              )}
+              {tag && tag !== 'active' && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${TAG_STYLE[tag]}`}>{TAG_LABEL[tag]}</span>
+              )}
+              {alert && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${ALERT_CHIP[alert].cls}`}>
+                  <AlertTriangle className="w-2.5 h-2.5" />{ALERT_CHIP[alert].label}
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{q.customer_name || '—'}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{q.created_at ? relativeAge(q.created_at) : '—'}</p>
+          </div>
+          <Badge variant={STATUS_VARIANT[q.status] ?? 'gray'} className="flex-shrink-0 text-[10px]">
+            {STATUS_LABEL[q.status] ?? q.status}
+          </Badge>
+        </div>
+
+        {/* Mini progress */}
+        <MiniProgress status={q.status} />
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-gray-100 mx-4" />
+
+      {/* Amounts + doc badges */}
+      <div className="px-4 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] text-gray-400 font-medium">Quoted</p>
+            <p className="text-sm font-bold text-gray-900">
+              AED {(q.total_amount ?? 0).toLocaleString('en-AE', { minimumFractionDigits: 2 })}
+            </p>
+            {dd?.poAgreedAmount && (
+              <p className="text-[10px] text-green-700 font-semibold mt-0.5">
+                Agreed: AED {Number(dd.poAgreedAmount).toLocaleString('en-AE', { minimumFractionDigits: 2 })}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            {poNumber && (
+              <DocBadge
+                icon={FileCheck}
+                label={`PO: ${poNumber}`}
+                color="bg-amber-50 text-amber-700 border border-amber-200"
+                onClick={hasPOFile ? (e => { e.stopPropagation(); onViewPO() }) : undefined}
+              />
+            )}
+            {(invoiceNo || hasInvoiceFile) && (
+              <DocBadge
+                icon={Receipt}
+                label={invoiceNo ? `INV: ${invoiceNo}` : 'Invoice'}
+                color="bg-blue-50 text-blue-700 border border-blue-200"
+                onClick={hasInvoiceFile ? (e => { e.stopPropagation(); onViewInvoice() }) : undefined}
+              />
+            )}
+            {dd?.deliveryNotes?.length > 0 && (
+              <DocBadge
+                icon={Truck}
+                label={`DN (${dd.deliveryNotes.length})`}
+                color="bg-green-50 text-green-700 border border-green-200"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Actions row */}
+      <div className="border-t border-gray-100 px-3 py-2 flex items-center justify-between bg-gray-50/50">
+        <p className="text-[10px] text-gray-400">{q.created_at ? formatDate(q.created_at) : '—'}</p>
+        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={onView}
+            className="flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition-colors"
+          >
+            <Eye className="w-3 h-3" /> View
+          </button>
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1 text-[10px] font-medium text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 px-2 py-1 rounded-lg transition-colors"
+          >
+            <ChevronRight className="w-3 h-3" /> Edit
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 function openPoAttachment(dataUrl: string) {
   try {
@@ -28,112 +296,19 @@ function openPoAttachment(dataUrl: string) {
   }
 }
 
-const TYPE_LABEL: Record<QuotationType, string> = {
-  quotation: 'Quotation',
-  proforma:  'Proforma',
-  service:   'Service Q.',
-  dummy:     'Dummy',
-}
-
-const TAG_STYLE: Record<QuotationTag, string> = {
-  active:   '',
-  dummy_po: 'bg-amber-100 text-amber-700',
-  rejected: 'bg-red-100 text-red-700',
-}
-
-const TAG_LABEL: Record<QuotationTag, string> = {
-  active:   '',
-  dummy_po: 'Dummy PO',
-  rejected: 'Rejected',
-}
-
-const STATUS_VARIANT: Record<string, 'gray' | 'blue' | 'green' | 'red' | 'amber' | 'purple'> = {
-  draft:        'gray',
-  shared:       'blue',
-  acknowledged: 'purple',
-  po_received:  'amber',
-  invoiced:     'blue',
-  complete:     'green',
-  final:        'blue',
-  sent:         'blue',
-  approved:     'green',
-  rejected:     'red',
-}
-
-function relativeAge(dateStr: string): string {
-  const d = new Date(dateStr)
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7)  return `${days} days ago`
-  if (days < 30) return `${Math.floor(days / 7)}w ago`
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`
-  return `${Math.floor(days / 365)}y ago`
-}
-
 function validityChip(createdAt: string, validityDays: number | undefined): { label: string; cls: string } | null {
   if (!validityDays) return null
   const daysLeft = Math.ceil((new Date(createdAt).getTime() + validityDays * 86_400_000 - Date.now()) / 86_400_000)
-  if (daysLeft < 0)  return { label: `Expired ${Math.abs(daysLeft)}d ago`, cls: 'bg-red-100 text-red-600' }
-  if (daysLeft === 0) return { label: 'Expires today',                       cls: 'bg-amber-100 text-amber-700' }
-  if (daysLeft <= 7)  return { label: `${daysLeft}d left`,                   cls: 'bg-amber-100 text-amber-700' }
-  return              { label: `Valid · ${daysLeft}d`,                        cls: 'bg-green-100 text-green-700' }
-}
-
-function loadAlertSettings() {
-  try {
-    const p = JSON.parse(readData('pl_company_profile') ?? '{}')
-    return {
-      alertDaysBeforeExpiry: Number(p.alertDaysBeforeExpiry ?? 7),
-      alertStaleDays:        Number(p.alertStaleDays ?? 14),
-    }
-  } catch { return { alertDaysBeforeExpiry: 7, alertStaleDays: 14 } }
-}
-
-type AlertLevel = 'overdue' | 'expiring' | 'stale' | null
-
-function getAlertLevel(q: CustomerQuotation, settings: ReturnType<typeof loadAlertSettings>): AlertLevel {
-  const dd = q.doc_data as any
-  const terminal = ['complete', 'rejected'].includes(q.status)
-  if (terminal) return null
-
-  // Expiry-based alert
-  const docDate    = dd?.date ?? q.created_at
-  const validDays  = dd?.validityDays as number | undefined
-  if (validDays && docDate) {
-    const daysLeft = Math.ceil((new Date(docDate).getTime() + validDays * 86_400_000 - Date.now()) / 86_400_000)
-    if (daysLeft < 0)                             return 'overdue'
-    if (daysLeft <= settings.alertDaysBeforeExpiry) return 'expiring'
-  }
-
-  // Stale-stage alert (not progressed for N days)
-  const createdMs  = q.created_at ? new Date(q.created_at).getTime() : 0
-  const daysSince  = Math.floor((Date.now() - createdMs) / 86_400_000)
-  const activeStages = ['draft', 'shared', 'acknowledged']
-  if (activeStages.includes(q.status) && daysSince >= settings.alertStaleDays) return 'stale'
-
-  return null
+  if (daysLeft < 0)  return { label: 'Expired ' + Math.abs(daysLeft) + 'd ago', cls: 'bg-red-100 text-red-600' }
+  if (daysLeft === 0) return { label: 'Expires today', cls: 'bg-amber-100 text-amber-700' }
+  if (daysLeft <= 7)  return { label: daysLeft + 'd left', cls: 'bg-amber-100 text-amber-700' }
+  return              { label: 'Valid · ' + daysLeft + 'd', cls: 'bg-green-100 text-green-700' }
 }
 
 const ALERT_ROW: Record<NonNullable<AlertLevel>, string> = {
   overdue:  'bg-red-50 border-l-4 border-l-red-400',
   expiring: 'bg-amber-50 border-l-4 border-l-amber-400',
   stale:    'bg-yellow-50 border-l-4 border-l-yellow-300',
-}
-
-const ALERT_CHIP: Record<NonNullable<AlertLevel>, { label: string; cls: string }> = {
-  overdue:  { label: 'Overdue',      cls: 'bg-red-100 text-red-700' },
-  expiring: { label: 'Expiring soon', cls: 'bg-amber-100 text-amber-700' },
-  stale:    { label: 'No progress',  cls: 'bg-yellow-100 text-yellow-700' },
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  draft:        'Draft',
-  shared:       'Shared',
-  acknowledged: 'Acknowledged',
-  po_received:  'PO Received',
-  invoiced:     'Invoiced',
-  complete:     'Complete',
 }
 
 export default function QuotationsListPage() {

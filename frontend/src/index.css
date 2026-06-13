@@ -44,7 +44,7 @@
 .rich-text ol li { list-style: decimal; }
 
 @media print {
-  @page { size: A4; margin: 0; }
+  @page { size: A4; margin: 15mm 12mm; }
 
   body { background: white !important; }
 
@@ -54,6 +54,12 @@
   /* Remove app chrome */
   aside, nav, header { display: none !important; }
   main { padding: 0 !important; }
+
+  /* Hide sidebar and any flex siblings */
+  .print\:hidden { display: none !important; }
+
+  /* Flatten the flex layout so only the paper shows */
+  .flex.items-start { display: block !important; }
 
   /* Make editable fields look like plain text */
   input, textarea, select {
@@ -66,31 +72,33 @@
     appearance: none;
   }
 
-  /* Each A4 sheet: exact size, no overflow, no margin between sheets */
+  /* Remove the scrollable overflow wrapper */
+  .overflow-x-auto { overflow: visible !important; }
+
+  /* Single continuous paper — let the browser paginate naturally */
   .quotation-paper {
-    width: 210mm !important;
-    height: 297mm !important;
-    max-height: 297mm !important;
-    overflow: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: unset !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
     margin: 0 !important;
+    padding: 0 !important;
     box-shadow: none !important;
-    /* Force a new physical page after every sheet except the last */
-    break-after: page;
-    page-break-after: always;
+    break-after: auto;
+    page-break-after: auto;
   }
 
-  /* Last page: no trailing page break */
-  .quotation-paper:last-child {
-    break-after: avoid;
-    page-break-after: avoid;
-  }
+  /* Keep table rows intact across physical page breaks */
+  tr { break-inside: avoid; page-break-inside: avoid; }
 
-  /* Never split the interior of a single sheet */
-  .quotation-paper {
+  /* Repeat column headers on each physical page */
+  thead { display: table-header-group; }
+
+  /* Keep totals + signature + footer contact block together */
+  .print-keep-together {
     break-inside: avoid;
     page-break-inside: avoid;
   }
-
-  /* Keep table rows together where possible */
-  tr { page-break-inside: avoid; }
 }

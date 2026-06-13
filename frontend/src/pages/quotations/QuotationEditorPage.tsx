@@ -1,10 +1,10 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Plus, Trash2, Printer, Save, ArrowLeft, ChevronDown,
   Settings, X, Check, Upload, Bold, Italic, List,
   Send, Eye, FileCheck, CheckCircle2, Paperclip, FileText,
-  Truck, PackageCheck, Pencil, UserPlus, Phone, Mail, MapPin, Building2,
+  Truck, PackageCheck, Pencil, UserPlus, Phone, Mail, MapPin, Receipt,
 } from 'lucide-react'
 import type { CustomerInvoice, DeliveryNote, DeliveryNoteItem } from '@/types'
 import { Button } from '@/components/ui'
@@ -80,6 +80,11 @@ export interface QuotationDoc {
   poAgreedAmount?: number
   poAttachment?: string
   poAttachmentName?: string
+  invoiceNo?: string
+  invoiceDate?: string
+  invoiceAmount?: number
+  invoiceAttachment?: string
+  invoiceAttachmentName?: string
   attachments?: DocAttachment[]
   invoiceId?: string
   sharedDate?: string
@@ -112,9 +117,11 @@ const INV_KEY = 'pl_invoices'
 const PROFILE_KEY = 'pl_company_profile'
 const DEFAULT_CUSTOMER_KEY = 'pl_default_customer'
 
-// Approximate available rows for line items per page (single-row lines)
-const FIRST_PAGE_ROWS = 15
-const OTHER_PAGE_ROWS = 24
+// Approximate available rows for line items per page (single-row lines).
+// First page is shorter because the header/customer block takes ~8 rows.
+// Values are conservative: better to spill to a new page than to clip.
+const FIRST_PAGE_ROWS = 10
+const OTHER_PAGE_ROWS = 18
 
 const DEFAULT_PROFILE = {
   name: 'Your Company Name',
@@ -171,11 +178,16 @@ function newLine(): QLine {
   return { _key: crypto.randomUUID(), description: '', qty: '', unitPrice: '', amount: '' }
 }
 
+function isEmptyLine(l: QLine): boolean {
+  return !l.description && !l.qty && !l.unitPrice && !l.amount
+}
+
 function estimateRows(line: QLine): number {
+  // Description column is ~52 chars wide at the rendered font size.
   const chars = (line.description || '').length
-  if (chars <= 70) return 1
-  if (chars <= 140) return 2
-  return Math.ceil(chars / 70)
+  if (chars <= 52) return 1
+  if (chars <= 104) return 2
+  return Math.ceil(chars / 52)
 }
 
 function buildPages(lines: QLine[]): QLine[][] {
@@ -184,19 +196,32 @@ function buildPages(lines: QLine[]): QLine[][] {
   let used = 0
 
   for (const line of lines) {
-    const rows = estimateRows(line)
+    const empty = isEmptyLine(line)
+    const rows = empty ? 0 : estimateRows(line)
     const max = pages.length === 0 ? FIRST_PAGE_ROWS : OTHER_PAGE_ROWS
-    if (used + rows > max && current.length > 0) {
+    // Only start a new page when current already has real (non-empty) content.
+    // Empty placeholder rows don't count toward the row budget and don't
+    // trigger a break on their own — they travel with their surrounding content.
+    const currentHasContent = current.some(l => !isEmptyLine(l))
+    if (!empty && used + rows > max && currentHasContent) {
       pages.push(current)
       current = [line]
       used = rows
     } else {
       current.push(line)
-      used += rows
+      if (!empty) used += rows
     }
   }
 
   if (current.length > 0 || pages.length === 0) pages.push(current)
+
+  // Merge any trailing empty-only pages into the previous page so the
+  // totals always render alongside the last real content row.
+  while (pages.length > 1 && pages[pages.length - 1].every(isEmptyLine)) {
+    const trailing = pages.pop()!
+    pages[pages.length - 1].push(...trailing)
+  }
+
   return pages
 }
 
@@ -448,9 +473,10 @@ interface WorkflowStripProps {
   onUploadInvoice: () => void
   nav: (path: string) => void
   onOpenViewer: (url: string, title: string) => void
+  onShowInMainPanel: (url: string, title: string) => void
 }
 
-function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: WorkflowStripProps) {
+function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer, onShowInMainPanel }: WorkflowStripProps) {
   const [showShareForm, setShowShareForm] = useState(false)
   const [sharedContactNameInput, setSharedContactNameInput] = useState('')
   const [sharedContactEmailInput, setSharedContactEmailInput] = useState('')
@@ -462,7 +488,17 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
   const [poDueDateInput, setPoDueDateInput] = useState('')
   const [poAgreedAmountInput, setPoAgreedAmountInput] = useState('')
   const [poFile, setPoFile] = useState('')
+  const [poFileName, setPoFileName] = useState('')
   const poFileRef = useRef<HTMLInputElement>(null)
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false)
+  const [showPOViewer, setShowPOViewer] = useState(false)
+  const [showInvoiceViewer, setShowInvoiceViewer] = useState(false)
+  const [invoiceNoInput, setInvoiceNoInput] = useState('')
+  const [invoiceDateInput, setInvoiceDateInput] = useState('')
+  const [invoiceAmountInput, setInvoiceAmountInput] = useState('')
+  const [invoiceFile, setInvoiceFile] = useState('')
+  const [invoiceFileName, setInvoiceFileName] = useState('')
+  const invoiceFileRef = useRef<HTMLInputElement>(null)
 
   const effectiveStatus: QuotationStatus = doc.status === 'acknowledged' ? 'shared' : doc.status
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === effectiveStatus)
@@ -470,10 +506,40 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
   function handlePOFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setPoFileName(file.name)
     const reader = new FileReader()
     reader.onload = () => setPoFile(reader.result as string)
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  function handleInvoiceFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setInvoiceFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => setInvoiceFile(reader.result as string)
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  function handleSaveInvoice() {
+    const amount = parseFloat(invoiceAmountInput.replace(/,/g, ''))
+    onUpdate({
+      status: 'invoiced',
+      invoiceNo: invoiceNoInput.trim() || undefined,
+      invoiceDate: invoiceDateInput || undefined,
+      invoiceAmount: !isNaN(amount) && amount > 0 ? amount : undefined,
+      invoiceAttachment: invoiceFile || undefined,
+      invoiceAttachmentName: invoiceFileName || undefined,
+    })
+    setShowInvoiceForm(false)
+    setShowInvoiceViewer(true)
+    setInvoiceNoInput('')
+    setInvoiceDateInput('')
+    setInvoiceAmountInput('')
+    setInvoiceFile('')
+    setInvoiceFileName('')
   }
 
   function handleSavePO() {
@@ -485,14 +551,17 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
       poDueDate: poDueDateInput || undefined,
       poAgreedAmount: !isNaN(agreed) && agreed > 0 ? agreed : undefined,
       poAttachment: poFile || undefined,
+      poAttachmentName: poFileName || undefined,
       poReceivedDate: new Date().toISOString().slice(0, 10),
     })
     setShowPOForm(false)
+    setShowPOViewer(true)
     setPoInput('')
     setPoDateInput('')
     setPoDueDateInput('')
     setPoAgreedAmountInput('')
     setPoFile('')
+    setPoFileName('')
   }
 
   function openShareForm() {
@@ -531,17 +600,43 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
       return
     }
     if (step === 'po_received') {
-      onUpdate({ status: 'po_received' })
-      setShowPOForm(true)
-      setPoInput(doc.poNumber ?? '')
-      setPoDateInput(doc.poDate ?? '')
-      setPoDueDateInput(doc.poDueDate ?? '')
-      setPoAgreedAmountInput(doc.poAgreedAmount != null ? String(doc.poAgreedAmount) : '')
-      setPoFile(doc.poAttachment ?? '')
+      if (doc.poNumber) {
+        // PO already recorded — toggle viewer
+        setShowShareForm(false)
+        setShowPOForm(false)
+        setShowInvoiceForm(false)
+        setShowPOViewer(v => !v)
+        if (doc.status !== 'po_received' && doc.status !== 'invoiced' && doc.status !== 'complete') {
+          onUpdate({ status: 'po_received' })
+        }
+      } else {
+        // No PO yet — open form
+        onUpdate({ status: 'po_received' })
+        setShowInvoiceForm(false)
+        setShowPOViewer(false)
+        setShowPOForm(true)
+        setPoInput(doc.poNumber ?? '')
+        setPoDateInput(doc.poDate ?? '')
+        setPoDueDateInput(doc.poDueDate ?? '')
+        setPoAgreedAmountInput(doc.poAgreedAmount != null ? String(doc.poAgreedAmount) : '')
+        setPoFile(doc.poAttachment ?? '')
+      }
+      return
+    }
+    if (step === 'invoiced') {
+      setShowShareForm(false)
+      setShowPOForm(false)
+      setShowInvoiceForm(true)
+      setInvoiceNoInput(doc.invoiceNo ?? '')
+      setInvoiceDateInput(doc.invoiceDate ?? '')
+      setInvoiceAmountInput(doc.invoiceAmount != null ? String(doc.invoiceAmount) : '')
+      setInvoiceFile(doc.invoiceAttachment ?? '')
+      setInvoiceFileName(doc.invoiceAttachmentName ?? '')
       return
     }
     setShowShareForm(false)
     setShowPOForm(false)
+    setShowInvoiceForm(false)
     onUpdate({ status: step })
   }
 
@@ -597,6 +692,126 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
           )
         })}
       </div>
+
+      {/* ── PO Viewer panel ── */}
+      {showPOViewer && doc.poNumber && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <FileCheck className="w-3.5 h-3.5 text-amber-600" />
+              <span className="text-xs font-semibold text-amber-700">PO</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-amber-900">{doc.poNumber}</span>
+            {doc.poDate && <span className="text-xs text-amber-700">{formatDate(doc.poDate)}</span>}
+            {doc.poDueDate && <span className="text-xs text-amber-600">Due: {formatDate(doc.poDueDate)}</span>}
+            {doc.poAgreedAmount != null && (
+              <span className="text-xs font-semibold text-amber-900">AED {doc.poAgreedAmount.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+            )}
+            {doc.poAttachment && (
+              <button
+                onClick={() => onShowInMainPanel(doc.poAttachment!, doc.poAttachmentName ?? `PO — ${doc.poNumber}`)}
+                className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 bg-white border border-amber-200 hover:border-amber-400 px-2 py-0.5 rounded transition-colors"
+              >
+                <Paperclip className="w-3 h-3" />
+                {doc.poAttachmentName ?? 'View PDF'}
+              </button>
+            )}
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setShowPOViewer(false)
+                  setShowInvoiceForm(false)
+                  setShowPOForm(true)
+                  setPoInput(doc.poNumber ?? '')
+                  setPoDateInput(doc.poDate ?? '')
+                  setPoDueDateInput(doc.poDueDate ?? '')
+                  setPoAgreedAmountInput(doc.poAgreedAmount != null ? String(doc.poAgreedAmount) : '')
+                  setPoFile(doc.poAttachment ?? '')
+                  setPoFileName(doc.poAttachmentName ?? '')
+                }}
+                className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 bg-white border border-amber-200 hover:border-amber-400 px-2 py-0.5 rounded transition-colors"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
+              <button onClick={() => setShowPOViewer(false)} className="text-amber-400 hover:text-amber-700 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoice Viewer panel ── */}
+      {showInvoiceViewer && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          {(doc.invoiceNo || doc.invoiceAttachment || doc.invoiceDate || doc.invoiceAmount != null) ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <Receipt className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-xs font-semibold text-blue-700">Invoice</span>
+              </div>
+              {doc.invoiceNo && <span className="text-xs font-mono font-bold text-blue-900">{doc.invoiceNo}</span>}
+              {doc.invoiceDate && <span className="text-xs text-blue-700">{formatDate(doc.invoiceDate)}</span>}
+              {doc.invoiceAmount != null && (
+                <span className="text-xs font-semibold text-blue-900">AED {doc.invoiceAmount.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</span>
+              )}
+              {doc.invoiceAttachment && (
+                <button
+                  onClick={() => onShowInMainPanel(doc.invoiceAttachment!, doc.invoiceAttachmentName ?? `Invoice — ${doc.invoiceNo ?? ''}`)}
+                  className="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-900 bg-white border border-blue-200 hover:border-blue-400 px-2 py-0.5 rounded transition-colors"
+                >
+                  <Paperclip className="w-3 h-3" />
+                  {doc.invoiceAttachmentName ?? 'View PDF'}
+                </button>
+              )}
+              <div className="ml-auto flex items-center gap-1.5">
+                {doc.status !== 'complete' && (
+                  <button
+                    onClick={() => {
+                      setShowInvoiceViewer(false)
+                      setShowPOForm(false)
+                      setShowInvoiceForm(true)
+                      setInvoiceNoInput(doc.invoiceNo ?? '')
+                      setInvoiceDateInput(doc.invoiceDate ?? '')
+                      setInvoiceAmountInput(doc.invoiceAmount != null ? String(doc.invoiceAmount) : '')
+                      setInvoiceFile(doc.invoiceAttachment ?? '')
+                      setInvoiceFileName(doc.invoiceAttachmentName ?? '')
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-900 bg-white border border-blue-200 hover:border-blue-400 px-2 py-0.5 rounded transition-colors"
+                  >
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                )}
+                <button onClick={() => { setShowInvoiceViewer(false); setInvoiceNoInput(''); setInvoiceDateInput(''); setInvoiceAmountInput(''); setInvoiceFile(''); setInvoiceFileName('') }} className="text-blue-400 hover:text-blue-700 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <Receipt className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-xs font-semibold text-blue-700">Invoice</span>
+              </div>
+              <input ref={invoiceFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleInvoiceFile} />
+              <input className="input-base text-xs w-28" placeholder="INV-001" value={invoiceNoInput} onChange={e => setInvoiceNoInput(e.target.value)} />
+              <input type="date" className="input-base text-xs w-34" value={invoiceDateInput} onChange={e => setInvoiceDateInput(e.target.value)} />
+              <input type="number" min="0" step="0.01" className="input-base text-xs w-28" placeholder="Amount" value={invoiceAmountInput} onChange={e => setInvoiceAmountInput(e.target.value)} />
+              <button
+                onClick={() => invoiceFileRef.current?.click()}
+                className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors ${invoiceFile ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600'}`}
+              >
+                <Paperclip className="w-3 h-3" />
+                {invoiceFile ? (invoiceFileName || 'Attached') : 'Attach PDF'}
+              </button>
+              <Button variant="primary" onClick={handleSaveInvoice}>Save</Button>
+              <button onClick={() => { setShowInvoiceViewer(false); setInvoiceNoInput(''); setInvoiceDateInput(''); setInvoiceAmountInput(''); setInvoiceFile(''); setInvoiceFileName('') }} className="text-blue-400 hover:text-blue-700 transition-colors ml-auto">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Next action row */}
       <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">
@@ -667,7 +882,7 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
           </Button>
         )}
 
-        {effectiveStatus === 'shared' && showPOForm && (
+        {(effectiveStatus === 'shared' || doc.status === 'po_received') && showPOForm && (
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex flex-col gap-0.5">
               <label className="text-[10px] text-gray-500 font-medium">PO Number</label>
@@ -739,37 +954,146 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
           </div>
         )}
 
-        {doc.status === 'po_received' && (
+        {doc.status === 'po_received' && !showPOForm && !showInvoiceForm && (
           <>
-            {doc.poAttachment ? (
-              <button
-                onClick={() => onOpenViewer(doc.poAttachment!, doc.poAttachmentName ?? `PO: ${doc.poNumber}`)}
-                title="Open PO attachment"
-                className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100
-                  border border-amber-200 rounded px-2 py-1 font-medium underline underline-offset-2
-                  hover:no-underline transition-colors"
-              >
-                <Paperclip className="w-3 h-3" />
-                PO: {doc.poNumber}
-                {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
-                {doc.poDueDate ? ` · Due ${formatDate(doc.poDueDate)}` : ''}
-              </button>
-            ) : (
-              <span className="text-xs text-gray-600 bg-gray-100 rounded px-2 py-1 font-medium">
-                PO: {doc.poNumber}
-                {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
-                {doc.poDueDate ? ` · Due ${formatDate(doc.poDueDate)}` : ''}
-              </span>
-            )}
-            <Button variant="primary" onClick={onUploadInvoice}>
+            <button
+              onClick={() => {
+                setShowInvoiceViewer(false)
+                setShowPOViewer(v => !v)
+              }}
+              title="View PO details"
+              className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100
+                border border-amber-200 rounded px-2 py-1 font-medium transition-colors"
+            >
+              <FileCheck className="w-3 h-3" />
+              PO: {doc.poNumber}
+              {doc.poDate ? ` · ${formatDate(doc.poDate)}` : ''}
+            </button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setShowPOForm(false)
+                setShowPOViewer(false)
+                setShowInvoiceViewer(false)
+                setShowInvoiceForm(true)
+                setInvoiceNoInput(doc.invoiceNo ?? '')
+                setInvoiceDateInput(doc.invoiceDate ?? '')
+                setInvoiceAmountInput(doc.invoiceAmount != null ? String(doc.invoiceAmount) : '')
+                setInvoiceFile(doc.invoiceAttachment ?? '')
+                setInvoiceFileName(doc.invoiceAttachmentName ?? '')
+              }}
+            >
               <Upload className="w-3.5 h-3.5" />
               Upload Invoice
             </Button>
           </>
         )}
 
-        {doc.status === 'invoiced' && (
+        {doc.status === 'po_received' && showInvoiceForm && !showPOForm && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium">Invoice No.</label>
+              <input
+                className="input-base text-sm w-36"
+                placeholder="INV-001"
+                value={invoiceNoInput}
+                onChange={e => setInvoiceNoInput(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium">Invoice Date</label>
+              <input
+                type="date"
+                className="input-base text-sm w-36"
+                value={invoiceDateInput}
+                onChange={e => setInvoiceDateInput(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium">Invoice Amount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="input-base text-sm w-36"
+                placeholder="0.00"
+                value={invoiceAmountInput}
+                onChange={e => setInvoiceAmountInput(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] text-gray-500 font-medium">Invoice PDF</label>
+              <input ref={invoiceFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleInvoiceFile} />
+              <button
+                onClick={() => invoiceFileRef.current?.click()}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors
+                  ${invoiceFile
+                    ? 'border-green-400 bg-green-50 text-green-700'
+                    : 'border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600'
+                  }`}
+              >
+                <Paperclip className="w-3.5 h-3.5" />
+                {invoiceFile ? (invoiceFileName || 'File attached') : 'Attach file'}
+              </button>
+              {invoiceFile && (
+                <button onClick={() => { setInvoiceFile(''); setInvoiceFileName('') }} className="text-[10px] text-red-400 hover:text-red-600 mt-0.5">
+                  Remove
+                </button>
+              )}
+            </div>
+            <div className="flex items-end gap-2 pb-0.5 mt-4">
+              <Button variant="primary" onClick={handleSaveInvoice}>
+                Save
+              </Button>
+              <Button variant="ghost" onClick={() => { setShowInvoiceForm(false); setInvoiceNoInput(''); setInvoiceDateInput(''); setInvoiceAmountInput(''); setInvoiceFile(''); setInvoiceFileName('') }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {doc.status === 'invoiced' && !showInvoiceForm && (
           <>
+            {doc.poNumber && (
+              <button
+                onClick={() => { setShowInvoiceViewer(false); setShowPOViewer(true) }}
+                title="View PO details"
+                className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100
+                  border border-amber-200 rounded px-2 py-1 font-medium transition-colors"
+              >
+                <FileCheck className="w-3 h-3" />
+                PO: {doc.poNumber}
+              </button>
+            )}
+            {(doc.invoiceNo || doc.invoiceAttachment || doc.invoiceDate || doc.invoiceAmount != null) ? (
+              <button
+                onClick={() => { setShowPOViewer(false); setShowInvoiceViewer(true) }}
+                title="View Invoice"
+                className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100
+                  border border-blue-200 rounded px-2 py-1 font-medium transition-colors"
+              >
+                <Receipt className="w-3 h-3" />
+                {doc.invoiceNo ? `Invoice: ${doc.invoiceNo}` : 'Invoice'}
+                {doc.invoiceDate ? ` · ${formatDate(doc.invoiceDate)}` : ''}
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowPOViewer(false)
+                  setShowInvoiceViewer(true)
+                  setInvoiceNoInput('')
+                  setInvoiceDateInput('')
+                  setInvoiceAmountInput('')
+                  setInvoiceFile('')
+                  setInvoiceFileName('')
+                }}
+                className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100
+                  border border-blue-200 rounded px-2 py-1 font-medium transition-colors"
+              >
+                <Upload className="w-3 h-3" />
+                Upload Invoice
+              </button>
+            )}
             {doc.invoiceId && (
               <button
                 onClick={() => nav(`/invoices/${doc.invoiceId}`)}
@@ -789,12 +1113,112 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
         )}
 
         {doc.status === 'complete' && (
-          <span className="text-sm font-semibold text-green-600 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" />
-            This quotation is complete
-          </span>
+          <>
+            {doc.poNumber && (
+              <button
+                onClick={() => { setShowInvoiceViewer(false); setShowPOViewer(true) }}
+                title="View PO details"
+                className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100
+                  border border-amber-200 rounded px-2 py-1 font-medium transition-colors"
+              >
+                <FileCheck className="w-3 h-3" />
+                PO: {doc.poNumber}
+              </button>
+            )}
+            {(doc.invoiceNo || doc.invoiceAttachment) && (
+              <button
+                onClick={() => { setShowPOViewer(false); setShowInvoiceViewer(true) }}
+                title="View Invoice"
+                className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100
+                  border border-blue-200 rounded px-2 py-1 font-medium transition-colors"
+              >
+                <Receipt className="w-3 h-3" />
+                {doc.invoiceNo ? `Invoice: ${doc.invoiceNo}` : 'Invoice'}
+                {doc.invoiceDate ? ` · ${formatDate(doc.invoiceDate)}` : ''}
+              </button>
+            )}
+            <span className="text-sm font-semibold text-green-600 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              This quotation is complete
+            </span>
+          </>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── CustomerNameTypeahead ─────────────────────────────────────────
+function CustomerNameTypeahead({ value, onChange, customers, onSelect }: {
+  value: string
+  onChange: (v: string) => void
+  customers: StoredCustomer[]
+  onSelect: (c: StoredCustomer) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(value)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Keep query in sync when value changes externally (e.g. customer selected from outside)
+  useEffect(() => { setQuery(value) }, [value])
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const filtered = query.trim()
+    ? customers.filter(c => c.company.toLowerCase().includes(query.toLowerCase()))
+    : customers
+
+  return (
+    <div ref={ref} className="relative flex-1 print:contents">
+      <input
+        type="text"
+        value={query}
+        placeholder="Customer Name"
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        className="font-bold text-gray-800 bg-transparent border border-transparent hover:border-gray-300
+          focus:border-blue-400 focus:outline-none focus:bg-blue-50/30 rounded px-1 py-0.5 w-full
+          transition-colors print:border-transparent print:bg-transparent"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-[200] overflow-hidden">
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.map(c => (
+              <div
+                key={c.id}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 transition-colors cursor-pointer"
+                onMouseDown={e => {
+                  e.preventDefault()
+                  setQuery(c.company)
+                  onChange(c.company)
+                  onSelect(c)
+                  setOpen(false)
+                }}
+              >
+                <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <SafeImg
+                    src={c.logoImage ?? ''}
+                    alt={c.company}
+                    className="w-full h-full object-contain"
+                    fallback={<span className="text-blue-600 text-[10px] font-bold">{c.company[0]}</span>}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{c.company}</p>
+                  <p className="text-xs text-gray-400 truncate">{[c.city, c.email].filter(Boolean).join(' · ')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -803,6 +1227,7 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer }: Wo
 interface PageProps {
   doc: QuotationDoc
   lines: QLine[]
+  lineOffset: number
   pageNum: number
   totalPages: number
   subtotal: number
@@ -815,12 +1240,14 @@ interface PageProps {
   onAddLine: () => void
   onRemoveLine: (key: string) => void
   customerId: string
+  onSelectCustomer?: (c: StoredCustomer) => void
+  customers?: StoredCustomer[]
 }
 
 function QuotationPage({
-  doc, lines, pageNum, totalPages, subtotal, vatAmt, grandTotal,
+  doc, lines, lineOffset, pageNum, totalPages, subtotal, vatAmt, grandTotal,
   isLastPage, isFirstPage, onChange, onLineChange, onAddLine, onRemoveLine,
-  customerId,
+  customerId, onSelectCustomer, customers = [],
 }: PageProps) {
   const set = (f: keyof QuotationDoc) => (v: string) => onChange({ ...doc, [f]: v })
   const defaultProfile = loadProfile()
@@ -832,28 +1259,24 @@ function QuotationPage({
 
   return (
     <div
-      className={`quotation-paper bg-white w-[210mm] h-[297mm] max-w-[210mm] p-[10mm] mx-auto flex flex-col overflow-hidden
-        shadow-[0_2px_20px_rgba(0,0,0,0.12)]
-        ${pageNum > 1 ? 'mt-12 print:mt-0' : ''}`}
+      className={`relative quotation-paper bg-white w-[210mm] min-h-[297mm] max-w-[210mm] p-[10mm] mx-auto
+        shadow-[0_2px_20px_rgba(0,0,0,0.12)] print:shadow-none print:min-h-0 print:mx-0`}
     >
+      {doc.status === 'complete' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 overflow-hidden">
+          <span
+            className="font-black text-red-500 select-none tracking-widest"
+            style={{ fontSize: '110px', opacity: 0.1, transform: 'rotate(-45deg)', whiteSpace: 'nowrap' }}
+          >
+            CLOSED
+          </span>
+        </div>
+      )}
       {/* ── First-page header ─────────────────────────────────── */}
       {isFirstPage && (
         <div className="flex items-start justify-between mb-4 pb-3 border-b-2 border-gray-800">
-          {/* Left: customer logo (read from customer template) */}
-          <div className="flex flex-col items-start gap-1">
-            <div className="w-24 h-16 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden print:border-0 print:bg-transparent">
-              <SafeImg
-                src={doc.customerLogoImage}
-                alt={doc.customerName || 'Customer'}
-                className="max-w-full max-h-full object-contain p-1"
-                fallback={<Building2 className="w-7 h-7 text-gray-200" />}
-              />
-            </div>
-            <p className="text-[9px] text-gray-400 italic print:hidden">Customer logo</p>
-          </div>
-
           {/* Center: Quotation type title — editable on screen, static on print */}
-          <div className="text-center flex-1 mx-6 mt-2">
+          <div className="text-center flex-1 mr-6 mt-2">
             <select
               value={doc.quotationType ?? 'quotation'}
               onChange={e => onChange({ ...doc, quotationType: e.target.value as QuotationType })}
@@ -911,10 +1334,14 @@ function QuotationPage({
       {isFirstPage && (
         <div className="flex justify-between mb-4 gap-4">
           <div className="flex-1 text-xs leading-relaxed">
-            <p className="font-bold text-gray-800 mb-0.5">
-              M/s.{' '}
-              <F value={doc.customerName} onChange={set('customerName')}
-                className="font-bold inline-block" placeholder="Customer Name" />
+            <p className="font-bold text-gray-800 mb-0.5 flex items-center gap-1">
+              <span className="flex-shrink-0">M/s.</span>
+              <CustomerNameTypeahead
+                value={doc.customerName}
+                onChange={set('customerName')}
+                customers={customers}
+                onSelect={c => onSelectCustomer?.(c)}
+              />
             </p>
             {(doc.customerContactName || true) && (
               <div className="flex gap-1 items-center">
@@ -1009,10 +1436,12 @@ function QuotationPage({
               {lines.map((line, idx) => {
                 const hasCalc = !!(line.qty && line.unitPrice)
                 const computedAmt = hasCalc ? calcLine(line).toFixed(2) : ''
+                const empty = isEmptyLine(line)
                 return (
-                  <tr key={line._key} className="border border-gray-300">
+                  <tr key={line._key}
+                    className={`border border-gray-300 ${empty ? 'print:hidden' : ''}`}>
                     <td className="border border-gray-300 py-1 px-2 text-center text-gray-500 align-top">
-                      {idx + 1}
+                      {empty ? '' : lineOffset + idx + 1}
                     </td>
                     <td className="border border-gray-300 py-1 px-1 align-top">
                       <AutoTextarea
@@ -1069,6 +1498,22 @@ function QuotationPage({
                   <td className="border border-gray-400 py-2 px-2 text-right font-bold text-gray-900">{grandTotal.toFixed(2)}</td>
                   <td className="border border-gray-400 print:hidden" />
                 </tr>
+                {doc.poAgreedAmount != null && doc.status !== 'draft' && (
+                  <tr className="border border-gray-400 bg-amber-50">
+                    <td colSpan={3} className="border border-gray-400 py-1.5 px-2" />
+                    <td className="border border-gray-400 py-1.5 px-2 text-center text-amber-700 font-medium text-xs">PO Value AED</td>
+                    <td className="border border-gray-400 py-1.5 px-2 text-right text-amber-800 font-semibold text-xs">{doc.poAgreedAmount.toFixed(2)}</td>
+                    <td className="border border-gray-400 print:hidden" />
+                  </tr>
+                )}
+                {doc.invoiceAmount != null && doc.status !== 'draft' && (
+                  <tr className="border border-gray-400 bg-green-50">
+                    <td colSpan={3} className="border border-gray-400 py-1.5 px-2" />
+                    <td className="border border-gray-400 py-1.5 px-2 text-center text-green-700 font-medium text-xs">Invoice Value AED</td>
+                    <td className="border border-gray-400 py-1.5 px-2 text-right text-green-800 font-semibold text-xs">{doc.invoiceAmount.toFixed(2)}</td>
+                    <td className="border border-gray-400 print:hidden" />
+                  </tr>
+                )}
                 {/* Add line — below the totals, last page only */}
                 <tr className="print:hidden">
                   <td
@@ -1091,7 +1536,7 @@ function QuotationPage({
 
       {/* ── Footer (last page only) ───────────────────────────── */}
       {isLastPage && (
-        <div className="mt-auto pt-3 border-t border-gray-300 text-xs space-y-1.5">
+        <div className="print-keep-together mt-auto pt-3 border-t border-gray-300 text-xs space-y-1.5">
           <div className="flex gap-2">
             <span className="font-bold text-gray-700 w-36 flex-shrink-0">Amount in words</span>
             <span className="text-gray-500">:</span>
@@ -1155,7 +1600,7 @@ function QuotationPage({
       )}
 
       {/* ── Page footer — every page ──────────────────────────── */}
-      <div className="mt-auto pt-2">
+      <div className="print-keep-together pt-2">
         <div className="border-t border-gray-400" />
         <div className="text-center leading-relaxed mt-1.5 space-y-0.5">
           {/* Line 1: address · mobile · fax */}
@@ -1392,8 +1837,12 @@ function toViewerUrl(url: string): string {
 // ── Main Editor ───────────────────────────────────────────────────
 export default function QuotationEditorPage() {
   const { id } = useParams<{ id?: string }>()
+  const [searchParams] = useSearchParams()
   const nav = useNavigate()
   const profile = loadProfile()
+
+  // View mode: existing quotations open in view-only by default unless ?edit=1
+  const [isViewMode, setIsViewMode] = useState(() => !!id && searchParams.get('edit') !== '1')
 
   const [doc, setDoc] = useState<QuotationDoc>(() => {
     if (id) {
@@ -1534,6 +1983,7 @@ export default function QuotationEditorPage() {
   const [sidebarPoUploading, setSidebarPoUploading] = useState(false)
   const sidebarPoFileRef = useRef<HTMLInputElement>(null)
   const [viewer, setViewer] = useState<{ url: string; title: string; blobUrl?: string } | null>(null)
+  const [mainViewPdf, setMainViewPdf] = useState<{ url: string; title: string } | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
   const apiDocLoaded = useRef(false)   // guard: don't overwrite user edits with stale API response
   const pendingCreateRef = useRef<Promise<string> | null>(null)  // guard: prevent duplicate POSTs on first save
@@ -1548,6 +1998,14 @@ export default function QuotationEditorPage() {
   function closeViewer() {
     if (viewer?.blobUrl) URL.revokeObjectURL(viewer.blobUrl)
     setViewer(null)
+  }
+
+  function openInMainPanel(rawUrl: string, title: string) {
+    if (!rawUrl) return
+    // revoke previous blob URL to prevent memory leak
+    if (mainViewPdf?.blobUrl) URL.revokeObjectURL(mainViewPdf.blobUrl)
+    const blobUrl = rawUrl.startsWith('data:') ? toViewerUrl(rawUrl) : undefined
+    setMainViewPdf({ url: blobUrl ?? rawUrl, title, blobUrl })
   }
 
   // Load org logo URL from server settings (for new quotations)
@@ -2211,8 +2669,9 @@ export default function QuotationEditorPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* ── Quotation tag picker (Active / Dummy PO / Rejected) ── */}
-          <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
+          {/* ── Quotation tag picker — hidden in view mode ── */}
+          {!isViewMode && (
+            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
             {([
               { value: 'active',   label: 'Active',    activeClass: 'bg-green-500 text-white border-green-500' },
               { value: 'dummy_po', label: 'Dummy PO',  activeClass: 'bg-amber-500 text-white border-amber-500' },
@@ -2231,305 +2690,17 @@ export default function QuotationEditorPage() {
               </button>
             ))}
           </div>
+          )}
 
-          {/* Customer picker */}
-          <div className="relative" ref={pickerRef}>
+          {!isViewMode && (
             <button
-              onClick={() => setShowCustomerPicker(v => !v)}
-              className="flex items-center gap-1.5 text-sm border border-gray-200 hover:border-blue-300 rounded-lg px-3 py-1.5 transition-colors"
+              onClick={() => setShowSettings(v => !v)}
+              className="p-1.5 text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+              title="Company settings"
             >
-              {doc.customerName || 'Select customer'}
-              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showCustomerPicker ? 'rotate-180' : ''}`} />
+              <Settings className="w-4 h-4" />
             </button>
-            {showCustomerPicker && (
-              <div className="absolute top-full left-0 mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
-
-                {/* ── List mode ── */}
-                {pickerMode === 'list' && (
-                  <>
-                    <div className="p-2 border-b border-gray-100">
-                      <input
-                        autoFocus
-                        type="text"
-                        placeholder="Search customers…"
-                        className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
-                        value={customerSearch}
-                        onChange={e => setCustomerSearch(e.target.value)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                    </div>
-
-                    <div className="max-h-60 overflow-y-auto">
-                      {filteredCustomers.length === 0 && (
-                        <p className="px-3 py-3 text-xs text-gray-400 text-center">
-                          {customers.length === 0 ? 'No customers yet.' : 'No matches.'}
-                        </p>
-                      )}
-                      {filteredCustomers.map(c => {
-                        const isDefault = loadDefaultCustomer()?.id === c.id
-                        return (
-                          <div
-                            key={c.id}
-                            className="group flex items-center gap-2 px-3 py-2 hover:bg-blue-50 transition-colors cursor-pointer"
-                            onClick={() => { selectCustomer(c); setCustomerSearch('') }}
-                          >
-                            <div className="w-7 h-7 rounded bg-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                              <SafeImg
-                                src={c.logoImage ?? ''}
-                                alt={c.company}
-                                className="w-full h-full object-contain"
-                                fallback={<span className="text-blue-600 text-xs font-bold">{c.company[0]}</span>}
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-sm font-medium text-gray-800 truncate">{c.company}</p>
-                                {isDefault && (
-                                  <span className="flex-shrink-0 text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">
-                                    Default
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-400 truncate">
-                                {[c.city, c.email].filter(Boolean).join(' · ')}
-                              </p>
-                            </div>
-                            <button
-                              onClick={e => { e.stopPropagation(); openEditCustomer(c) }}
-                              title="Edit details"
-                              className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded-md transition-all flex-shrink-0"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    <div className="p-2 border-t border-gray-100">
-                      <button
-                        onClick={() => openNewCustomer()}
-                        className="w-full flex items-center gap-2 text-xs text-blue-600 hover:bg-blue-50 rounded-lg px-2 py-2 transition-colors font-medium"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        Add new customer
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* ── Edit / New mode ── */}
-                {(pickerMode === 'edit' || pickerMode === 'new') && (
-                  <>
-                    {/* Header */}
-                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100 bg-gray-50">
-                      <button
-                        onClick={() => setPickerMode('list')}
-                        className="text-gray-400 hover:text-gray-700 p-0.5 rounded"
-                      >
-                        <ArrowLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-sm font-semibold text-gray-700">
-                        {pickerMode === 'new' ? 'New Customer' : 'Edit Customer'}
-                      </span>
-                    </div>
-
-                    {/* Form */}
-                    <div className="p-3 space-y-2.5 max-h-[440px] overflow-y-auto">
-
-                      {/* Logo upload */}
-                      <div className="flex flex-col items-center gap-1.5 py-1">
-                        <div
-                          className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50
-                            flex items-center justify-center cursor-pointer hover:border-blue-300 hover:bg-blue-50
-                            transition-colors overflow-hidden relative group"
-                          onClick={() => custLogoInputRef.current?.click()}
-                          title="Click to upload logo"
-                        >
-                          <SafeImg
-                              src={custForm.logo}
-                              alt="Customer logo"
-                              className="w-full h-full object-contain p-1.5"
-                              fallback={
-                                <div className="flex flex-col items-center gap-1 text-gray-300">
-                                  <Upload className="w-5 h-5" />
-                                  <span className="text-[9px] font-medium">Logo</span>
-                                </div>
-                              }
-                            />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-xl" />
-                        </div>
-                        <input
-                          ref={custLogoInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleCustLogoFileChange}
-                        />
-                        {custForm.logo && (
-                          <button
-                            onClick={() => { setCustForm(f => ({ ...f, logo: '' })); setCustLogoFile(null) }}
-                            className="text-[10px] text-red-400 hover:text-red-600"
-                          >
-                            Remove logo
-                          </button>
-                        )}
-                        {!custForm.logo && (
-                          <p className="text-[10px] text-gray-400">Click to upload logo</p>
-                        )}
-                      </div>
-
-                      {/* Company name */}
-                      <div>
-                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
-                          Company Name <span className="text-red-400">*</span>
-                        </label>
-                        <div className="mt-0.5 relative">
-                          <Building2 className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                          <input
-                            autoFocus
-                            type="text"
-                            value={custForm.company}
-                            onChange={e => setCustForm(f => ({ ...f, company: e.target.value }))}
-                            placeholder="Acme Corp"
-                            className="w-full text-sm border border-gray-200 rounded-lg pl-7 pr-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Contact name */}
-                      <div>
-                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Contact Person</label>
-                        <input
-                          type="text"
-                          value={custForm.contactName}
-                          onChange={e => setCustForm(f => ({ ...f, contactName: e.target.value }))}
-                          placeholder="John Smith"
-                          className="mt-0.5 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                        />
-                      </div>
-
-                      {/* Email + Phone side by side */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Email</label>
-                          <div className="mt-0.5 relative">
-                            <Mail className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-                            <input
-                              type="email"
-                              value={custForm.email}
-                              onChange={e => setCustForm(f => ({ ...f, email: e.target.value }))}
-                              placeholder="info@co.com"
-                              className="w-full text-xs border border-gray-200 rounded-lg pl-6 pr-1.5 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Phone</label>
-                          <div className="mt-0.5 relative">
-                            <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-                            <input
-                              type="tel"
-                              value={custForm.phone}
-                              onChange={e => setCustForm(f => ({ ...f, phone: e.target.value }))}
-                              placeholder="+971 50 …"
-                              className="w-full text-xs border border-gray-200 rounded-lg pl-6 pr-1.5 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* City + Industry */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">City</label>
-                          <div className="mt-0.5 relative">
-                            <MapPin className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-                            <input
-                              type="text"
-                              value={custForm.city}
-                              onChange={e => setCustForm(f => ({ ...f, city: e.target.value }))}
-                              placeholder="Dubai"
-                              className="w-full text-xs border border-gray-200 rounded-lg pl-6 pr-1.5 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Industry</label>
-                          <input
-                            type="text"
-                            value={custForm.industry}
-                            onChange={e => setCustForm(f => ({ ...f, industry: e.target.value }))}
-                            placeholder="Construction"
-                            className="mt-0.5 w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                          />
-                        </div>
-                      </div>
-
-                      {/* TRN */}
-                      <div>
-                        <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">TRN (Tax Reg. No.)</label>
-                        <input
-                          type="text"
-                          value={custForm.trn}
-                          onChange={e => setCustForm(f => ({ ...f, trn: e.target.value }))}
-                          placeholder="100123456700003"
-                          className="mt-0.5 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 font-mono"
-                        />
-                      </div>
-
-                      {/* Set as default customer toggle */}
-                      <button
-                        type="button"
-                        onClick={() => setCustFormIsDefault(v => !v)}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex flex-col items-start">
-                          <span className="text-xs font-medium text-gray-700">Set as default customer</span>
-                          <span className="text-[10px] text-gray-400">Pre-fills on every new quotation</span>
-                        </div>
-                        <div className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${custFormIsDefault ? 'bg-blue-500' : 'bg-gray-200'}`}>
-                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${custFormIsDefault ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                        </div>
-                      </button>
-
-                      {/* Error */}
-                      {custSaveError && (
-                        <p className="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
-                          {custSaveError}
-                        </p>
-                      )}
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={handleSaveCustomerForm}
-                          disabled={custSaving || !custForm.company.trim()}
-                          className="flex-1 text-sm bg-blue-600 text-white rounded-lg py-2 font-medium disabled:opacity-50 hover:bg-blue-700 transition-colors"
-                        >
-                          {custSaving ? 'Saving…' : pickerMode === 'new' ? 'Create & Select' : 'Save & Select'}
-                        </button>
-                        <button
-                          onClick={() => setPickerMode('list')}
-                          className="px-3 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={() => setShowSettings(v => !v)}
-            className="p-1.5 text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
-            title="Company settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
+          )}
 
           {saveError && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2 py-1.5">
@@ -2537,11 +2708,25 @@ export default function QuotationEditorPage() {
             </p>
           )}
 
-          <Button variant={saved ? 'ghost' : 'primary'} onClick={() => handleSave()}>
-            {saved
-              ? <><Check className="w-4 h-4 text-green-600" /> Saved</>
-              : <><Save className="w-4 h-4" /> Save</>}
-          </Button>
+          {isViewMode ? (
+            <Button variant="primary" onClick={() => setIsViewMode(false)}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              Edit
+            </Button>
+          ) : (
+            <>
+              <Button variant={saved ? 'ghost' : 'primary'} onClick={() => handleSave()}>
+                {saved
+                  ? <><Check className="w-4 h-4 text-green-600" /> Saved</>
+                  : <><Save className="w-4 h-4" /> Save</>}
+              </Button>
+              {id && (
+                <Button variant="ghost" onClick={() => { handleSave(); setIsViewMode(true) }}>
+                  <Check className="w-4 h-4 text-green-600" /> Done
+                </Button>
+              )}
+            </>
+          )}
 
           <Button variant="primary" onClick={handlePrint}>
             <Printer className="w-4 h-4" />
@@ -2562,6 +2747,7 @@ export default function QuotationEditorPage() {
         }}
         nav={nav}
         onOpenViewer={openViewer}
+        onShowInMainPanel={openInMainPanel}
       />
 
       {/* ── Settings panel ── */}
@@ -2574,40 +2760,82 @@ export default function QuotationEditorPage() {
         />
       )}
 
-      {/* ── A4 paper pages ── */}
-      <div className="overflow-x-auto pb-8">
-        <div className="flex flex-col gap-0 print:gap-0 w-[210mm] mx-auto">
-          {pages.map((pageLines, pi) => (
-            <div key={pi}>
-              {pi > 0 && (
-                <div className="no-print flex items-center gap-3 my-4 select-none">
-                  <div className="flex-1 border-t border-dashed border-gray-300" />
-                  <span className="text-[10px] text-gray-400 font-medium tracking-widest uppercase px-2">
-                    Page {pi + 1}
-                  </span>
-                  <div className="flex-1 border-t border-dashed border-gray-300" />
-                </div>
-              )}
-              <QuotationPage
-                doc={doc}
-                lines={pageLines}
-                pageNum={pi + 1}
-                totalPages={pages.length}
-                subtotal={subtotal}
-                vatAmt={vatAmt}
-                grandTotal={grandTotal}
-                isLastPage={pi === pages.length - 1}
-                isFirstPage={pi === 0}
-                onChange={updateDoc}
-                onLineChange={updateLine}
-                onAddLine={addLine}
-                onRemoveLine={removeLine}
-                customerId={doc.customerId}
-              />
+      {/* ── Main panel: PDF viewer or A4 paper pages ── */}
+      {mainViewPdf ? (
+        <div className="flex-1 flex flex-col min-h-0 mt-3">
+          <div className="flex items-center justify-between px-1 mb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (mainViewPdf?.blobUrl) URL.revokeObjectURL(mainViewPdf.blobUrl)
+                  setMainViewPdf(null)
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                Back to Quotation
+              </button>
+              <span className="text-xs text-gray-400">|</span>
+              <span className="text-sm font-semibold text-gray-700">{mainViewPdf.title}</span>
             </div>
-          ))}
+            <a
+              href={mainViewPdf.url}
+              download={mainViewPdf.title}
+              className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-2.5 py-1 hover:bg-blue-50 transition-colors"
+            >
+              Download
+            </a>
+          </div>
+          <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50" style={{ height: 'calc(100vh - 180px)' }}>
+            {/^data:image|\.(?:png|jpg|jpeg|gif|webp|svg)(?:\?|$)/i.test(mainViewPdf.url)
+              ? <img src={mainViewPdf.url} alt={mainViewPdf.title} className="w-full h-full object-contain p-4" />
+              : <iframe src={mainViewPdf.url} title={mainViewPdf.title} className="w-full h-full border-0" />
+            }
+          </div>
+        </div>
+      ) : (
+
+      <div className="overflow-x-auto pb-8">
+        {/* View mode banner */}
+        {isViewMode && (
+          <div className="no-print flex items-center justify-between mb-3 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl w-[210mm] mx-auto">
+            <div className="flex items-center gap-2 text-sm text-blue-700">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              <span className="font-medium">View mode</span>
+              <span className="text-blue-500 text-xs">— click Edit to make changes</span>
+            </div>
+            <button
+              onClick={() => setIsViewMode(false)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-white border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              Edit
+            </button>
+          </div>
+        )}
+        <div className={`w-[210mm] mx-auto ${isViewMode ? 'pointer-events-none select-text' : ''}`}>
+          <QuotationPage
+            doc={doc}
+            lines={doc.lines}
+            lineOffset={0}
+            pageNum={1}
+            totalPages={1}
+            subtotal={subtotal}
+            vatAmt={vatAmt}
+            grandTotal={grandTotal}
+            isLastPage={true}
+            isFirstPage={true}
+            onChange={updateDoc}
+            onLineChange={updateLine}
+            onAddLine={addLine}
+            onRemoveLine={removeLine}
+            customerId={doc.customerId}
+            customers={customers}
+            onSelectCustomer={c => selectCustomer(c)}
+          />
         </div>
       </div>
+      )}
       </div>{/* end main content */}
 
       {/* ── Right sidebar ── */}
