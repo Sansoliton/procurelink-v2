@@ -9,8 +9,25 @@ from app.services.auth_service import hash_password
 def seed():
     db = SessionLocal()
     try:
-        if db.query(Organisation).count() > 0:
-            print("Database already seeded — skipping.")
+        # Always ensure a default admin account exists (idempotent)
+        if not db.query(User).filter(User.email == "admin@procurelink.com").first():
+            default_org = db.query(Organisation).filter(Organisation.slug == "procurelink-demo").first()
+            if not default_org:
+                default_org = Organisation(name="ProcureLink Demo", slug="procurelink-demo", type=OrgType.customer)
+                db.add(default_org)
+                db.flush()
+            db.add(User(
+                org_id=default_org.id,
+                email="admin@procurelink.com",
+                hashed_password=hash_password("admin123"),
+                full_name="Admin User",
+                org_role=OrgRole.org_admin,
+            ))
+            db.commit()
+            print("✓ Default admin created: admin@procurelink.com / admin123")
+
+        if db.query(Organisation).filter(Organisation.slug == "acme-corp-demo").first():
+            print("Demo data already seeded — skipping.")
             return
 
         # Org

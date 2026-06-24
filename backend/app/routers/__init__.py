@@ -1147,15 +1147,22 @@ def analytics_overview(
 health_router = APIRouter(prefix="/health", tags=["system"])
 
 @health_router.get("")
-def health(db: Session = Depends(get_db)):
+def health():
+    import traceback
+    from app.database import engine
+    from sqlalchemy import text as _text
     try:
-        db.execute(__import__("sqlalchemy").text("SELECT 1"))
+        with engine.connect() as conn:
+            conn.execute(_text("SELECT 1"))
         db_ok = True
+        db_err = None
     except Exception:
         db_ok = False
+        db_err = traceback.format_exc()
     return {
         "status": "ok" if db_ok else "degraded",
         "db": "ok" if db_ok else "fail",
+        "db_error": db_err,
         "version": "2.0.0",
     }
 
@@ -1584,7 +1591,6 @@ def get_org_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the org-level settings JSON (includes logo_url, profile, etc.)."""
     org = db.query(Organisation).filter(Organisation.id == current_user.org_id).first()
     return org.settings or {}
 
@@ -1594,7 +1600,6 @@ def patch_org_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Merge-update the org settings JSON."""
     org = db.query(Organisation).filter(Organisation.id == current_user.org_id).first()
     merged = dict(org.settings or {})
     merged.update(payload)
@@ -1602,6 +1607,56 @@ def patch_org_settings(
     db.commit()
     db.refresh(org)
     return org.settings
+
+@org_router.get("/users", response_model=List[UserOut])
+def list_org_users(
+    current_user: User = Depends(require_org_admin),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(User)
+        .filter(User.org_id == current_user.org_id)
+        .order_by(User.created_at)
+        .all()
+    )
+
+@org_router.patch("/users/{user_id}", response_model=UserOut)
+def update_org_user(
+    user_id: str,
+    payload: dict,
+    current_user: User = Depends(require_org_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import OrgRole as _OrgRole
+    user = db.query(User).filter(User.id == user_id, User.org_id == current_user.org_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot modify your own account here")
+    allowed = {"org_role", "is_active", "full_name"}
+    for k, v in payload.items():
+        if k in allowed:
+            if k == "org_role":
+                v = _OrgRole(v)
+            setattr(user, k, v)
+    db.commit()
+    db.refresh(user)
+    return user
+
+@org_router.delete("/users/{user_id}")
+def remove_org_user(
+    user_id: str,
+    current_user: User = Depends(require_org_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id, User.org_id == current_user.org_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+    db.delete(user)
+    db.commit()
+    return {"ok": True}
 
 
 # ── Delivery Notes router ──────────────────────────────────────────

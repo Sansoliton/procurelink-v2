@@ -195,6 +195,16 @@ export const orgApi = {
     api.patch<Record<string, unknown>>('/org/settings', data).then((r) => r.data),
 }
 
+// ── User management (admin only) ─────────────────────────────────
+export const usersApi = {
+  list: () => api.get<import('@/types').User[]>('/org/users').then((r) => r.data),
+  update: (id: string, data: { org_role?: string; is_active?: boolean; full_name?: string }) =>
+    api.patch<import('@/types').User>(`/org/users/${id}`, data).then((r) => r.data),
+  remove: (id: string) => api.delete(`/org/users/${id}`).then((r) => r.data),
+  invite: (email: string, org_role: string) =>
+    api.post<{ token: string; expires_at: string }>('/auth/invite', { email, org_role }).then((r) => r.data),
+}
+
 // ── Customer Quotations (sales-side) ────────────────────────────
 export const cquotesApi = {
   list: () => api.get<CustomerQuotation[]>('/cquotes/').then((r) => r.data),

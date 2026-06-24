@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 're
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import {
   Bell, LogOut, Package,
-  Building2, Receipt, ClipboardList, ShoppingCart,
+  Building2, Receipt, ClipboardList, ShoppingCart, Users,
 } from 'lucide-react'
 
 const FEATURE_INVOICES = import.meta.env.VITE_FEATURE_INVOICES === 'true'
@@ -36,14 +36,24 @@ import InvoicesListPage from '@/pages/invoices/InvoicesListPage'
 import InvoiceEditorPage from '@/pages/invoices/InvoiceEditorPage'
 import DashboardPage from '@/pages/projects/DashboardPage'
 import PurchaseOrdersListPage from '@/pages/procurement/PurchaseOrdersListPage'
+import UsersPage from '@/pages/admin/UsersPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } })
 
-// ── Private route guard ──────────────────────────────────────────
+// ── Route guards ─────────────────────────────────────────────────
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
   if (isLoading) return <div className="flex items-center justify-center h-screen"><Spinner size="lg" /></div>
   if (!user) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
+  if (isLoading) return <div className="flex items-center justify-center h-screen"><Spinner size="lg" /></div>
+  if (!user) return <Navigate to="/login" replace />
+  if (user.org_role !== 'org-admin' && user.org_role !== 'super-admin')
+    return <Navigate to="/quotations" replace />
   return <>{children}</>
 }
 
@@ -121,6 +131,16 @@ function LeftSidebar() {
           Customers
         </NavLink>
 
+        {(user?.org_role === 'org-admin' || user?.org_role === 'super-admin') && (
+          <>
+            <p className={section}>Admin</p>
+            <NavLink to="/admin/users" className={linkCls}>
+              <Users className="w-4 h-4 flex-shrink-0" />
+              Users
+            </NavLink>
+          </>
+        )}
+
       </nav>
 
       {/* User footer */}
@@ -192,6 +212,9 @@ export default function App() {
                       {FEATURE_INVOICES && <Route path="/invoices" element={<InvoicesListPage />} />}
                       {FEATURE_INVOICES && <Route path="/invoices/:id" element={<InvoiceEditorPage />} />}
                       {FEATURE_PO && <Route path="/purchase-orders" element={<PurchaseOrdersListPage />} />}
+                      <Route path="/admin/users" element={
+                        <AdminRoute><UsersPage /></AdminRoute>
+                      } />
                     </Routes>
                   </AppLayout>
                 </PrivateRoute>

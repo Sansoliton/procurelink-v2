@@ -257,24 +257,7 @@ function calcLine(l: QLine): number {
   return isNaN(q) || isNaN(p) ? (parseFloat(l.amount) || 0) : q * p
 }
 
-// ── Safe image with fallback ──────────────────────────────────────
-function SafeImg({ src, alt, className, fallback }: {
-  src: string
-  alt: string
-  className?: string
-  fallback: React.ReactNode
-}) {
-  const [failed, setFailed] = useState(false)
-  if (!src || failed) return <>{fallback}</>
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={() => setFailed(true)}
-    />
-  )
-}
+
 
 // ── Logo upload ───────────────────────────────────────────────────
 function LogoUpload({ value, onChange, size = 'md', uploadFn }: {
@@ -624,6 +607,11 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer, onSh
       return
     }
     if (step === 'invoiced') {
+      if (!doc.poNumber) {
+        // Cannot invoice without a PO — redirect to PO step instead
+        handleStepClick('po_received')
+        return
+      }
       setShowShareForm(false)
       setShowPOForm(false)
       setShowInvoiceForm(true)
@@ -645,10 +633,19 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer, onSh
       {/* Step indicators */}
       <div className="flex items-center">
         {WORKFLOW_STEPS.map((step, idx) => {
-          const isDone = idx < currentIdx
-          const isActive = idx === currentIdx
-          const isFuture = idx > currentIdx
+          const isStatusDraft = effectiveStatus === 'draft'
           const isLast = idx === WORKFLOW_STEPS.length - 1
+          const isBlocked = step.key === 'invoiced' && !doc.poNumber
+
+          // All steps up to and including the current status are "done" (green),
+          // except when still in draft (nothing is completed yet).
+          const isDone = !isStatusDraft && idx <= currentIdx
+
+          // Draft is the only status where the current step is shown as "in progress" (blue).
+          const isCurrentDraft = isStatusDraft && idx === 0
+
+          // The step immediately after the current status is the next action (orange).
+          const isNextAction = !isStatusDraft && idx === currentIdx + 1 && !isBlocked
 
           return (
             <div key={step.key} className="flex items-center flex-1 min-w-0">
@@ -657,12 +654,16 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer, onSh
                 <button
                   type="button"
                   onClick={() => handleStepClick(step.key)}
-                  title={`Set status to ${step.label}`}
+                  title={isBlocked ? 'Record a PO first' : step.label}
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
                     isDone
                       ? 'bg-green-500 border-green-500 text-white'
-                      : isActive
+                      : isNextAction
+                      ? 'bg-orange-500 border-orange-500 text-white'
+                      : isCurrentDraft
                       ? 'bg-blue-600 border-blue-600 text-white'
+                      : isBlocked
+                      ? 'bg-white border-gray-200 text-gray-300 cursor-not-allowed'
                       : 'bg-white border-gray-300 text-gray-400'
                   }`}
                 >
@@ -673,14 +674,18 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer, onSh
                 </button>
                 <span
                   className={`text-[10px] font-medium whitespace-nowrap ${
-                    isDone ? 'text-green-600' : isActive ? 'text-blue-700' : isFuture ? 'text-gray-400' : ''
+                    isDone        ? 'text-green-600'
+                    : isNextAction  ? 'text-orange-600'
+                    : isCurrentDraft ? 'text-blue-700'
+                    : isBlocked    ? 'text-gray-300'
+                    : 'text-gray-400'
                   }`}
                 >
                   {step.label}
                 </span>
               </div>
 
-              {/* Connector line */}
+              {/* Connector line — green once the step on the left is done */}
               {!isLast && (
                 <div
                   className={`h-0.5 flex-1 mx-1 mb-4 transition-colors ${
@@ -1149,11 +1154,13 @@ function WorkflowStrip({ doc, onUpdate, onUploadInvoice, nav, onOpenViewer, onSh
 }
 
 // ── CustomerNameTypeahead ─────────────────────────────────────────
-function CustomerNameTypeahead({ value, onChange, customers, onSelect }: {
+function CustomerNameTypeahead({ value, onChange, customers, onSelect, onAddNew, onEdit }: {
   value: string
   onChange: (v: string) => void
   customers: StoredCustomer[]
   onSelect: (c: StoredCustomer) => void
+  onAddNew?: () => void
+  onEdit?: (c: StoredCustomer) => void
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState(value)
@@ -1175,6 +1182,8 @@ function CustomerNameTypeahead({ value, onChange, customers, onSelect }: {
     ? customers.filter(c => c.company.toLowerCase().includes(query.toLowerCase()))
     : customers
 
+  const showDropdown = open && (filtered.length > 0 || !!onAddNew)
+
   return (
     <div ref={ref} className="relative flex-1 print:contents">
       <input
@@ -1187,36 +1196,68 @@ function CustomerNameTypeahead({ value, onChange, customers, onSelect }: {
           focus:border-blue-400 focus:outline-none focus:bg-blue-50/30 rounded px-1 py-0.5 w-full
           transition-colors print:border-transparent print:bg-transparent"
       />
-      {open && filtered.length > 0 && (
+      {showDropdown && (
         <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-[200] overflow-hidden">
-          <div className="max-h-56 overflow-y-auto">
-            {filtered.map(c => (
-              <div
-                key={c.id}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 transition-colors cursor-pointer"
+          {filtered.length > 0 ? (
+            <div className="max-h-56 overflow-y-auto">
+              {filtered.map(c => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 transition-colors cursor-pointer group"
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    setQuery(c.company)
+                    onChange(c.company)
+                    onSelect(c)
+                    setOpen(false)
+                  }}
+                >
+                  <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 text-[10px] font-bold">{c.company[0]?.toUpperCase()}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{c.company}</p>
+                    <p className="text-xs text-gray-400 truncate">{[c.city, c.email].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  {onEdit && (
+                    <button
+                      onMouseDown={e => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        onEdit(c)
+                        setOpen(false)
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-all flex-shrink-0"
+                      title="Edit customer"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-3 py-3 text-xs text-gray-400 text-center">No customers found</div>
+          )}
+          {onAddNew && (
+            <div className="border-t border-gray-100">
+              <button
                 onMouseDown={e => {
                   e.preventDefault()
-                  setQuery(c.company)
-                  onChange(c.company)
-                  onSelect(c)
+                  onAddNew()
                   setOpen(false)
                 }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors font-medium"
               >
-                <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  <SafeImg
-                    src={c.logoImage ?? ''}
-                    alt={c.company}
-                    className="w-full h-full object-contain"
-                    fallback={<span className="text-blue-600 text-[10px] font-bold">{c.company[0]}</span>}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{c.company}</p>
-                  <p className="text-xs text-gray-400 truncate">{[c.city, c.email].filter(Boolean).join(' · ')}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add new customer
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1241,13 +1282,15 @@ interface PageProps {
   onRemoveLine: (key: string) => void
   customerId: string
   onSelectCustomer?: (c: StoredCustomer) => void
+  onAddNewCustomer?: () => void
+  onEditCustomer?: (c: StoredCustomer) => void
   customers?: StoredCustomer[]
 }
 
 function QuotationPage({
   doc, lines, lineOffset, pageNum, totalPages, subtotal, vatAmt, grandTotal,
   isLastPage, isFirstPage, onChange, onLineChange, onAddLine, onRemoveLine,
-  customerId, onSelectCustomer, customers = [],
+  customerId, onSelectCustomer, onAddNewCustomer, onEditCustomer, customers = [],
 }: PageProps) {
   const set = (f: keyof QuotationDoc) => (v: string) => onChange({ ...doc, [f]: v })
   const defaultProfile = loadProfile()
@@ -1274,25 +1317,27 @@ function QuotationPage({
       )}
       {/* ── First-page header ─────────────────────────────────── */}
       {isFirstPage && (
-        <div className="flex items-start justify-between mb-4 pb-3 border-b-2 border-gray-800">
-          {/* Center: Quotation type title — editable on screen, static on print */}
-          <div className="text-center flex-1 mr-6 mt-2">
-            <select
-              value={doc.quotationType ?? 'quotation'}
-              onChange={e => onChange({ ...doc, quotationType: e.target.value as QuotationType })}
-              className="text-3xl font-bold tracking-wide text-gray-900 bg-transparent border-0 outline-none
-                cursor-pointer hover:bg-blue-50/60 rounded-lg px-2 py-0.5 text-center appearance-none
-                print:pointer-events-none print:bg-transparent"
-              style={{ WebkitAppearance: 'none' }}
-            >
-              {(Object.entries(QUOTATION_TYPE_LABELS) as [QuotationType, string][]).map(([v, label]) => (
-                <option key={v} value={v}>{label}</option>
-              ))}
-            </select>
+        <div className="relative flex items-start mb-4 pb-3 border-b-2 border-gray-800">
+          {/* Title — always centered on the full width of the paper */}
+          <div className="absolute inset-x-0 top-0 flex justify-center mt-2 pointer-events-none">
+            <div className="pointer-events-auto">
+              <select
+                value={doc.quotationType ?? 'quotation'}
+                onChange={e => onChange({ ...doc, quotationType: e.target.value as QuotationType })}
+                className="text-3xl font-bold tracking-wide text-gray-900 bg-transparent border-0 outline-none
+                  cursor-pointer hover:bg-blue-50/60 rounded-lg px-2 py-0.5 text-center appearance-none
+                  print:pointer-events-none print:bg-transparent"
+                style={{ WebkitAppearance: 'none' }}
+              >
+                {(Object.entries(QUOTATION_TYPE_LABELS) as [QuotationType, string][]).map(([v, label]) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Right: company logo + subtitle + name */}
-          <div className="flex flex-col items-end gap-1">
+          {/* Right: company logo + name (ml-auto pushes it to the right edge) */}
+          <div className="ml-auto flex flex-col items-end gap-1">
             <LogoUpload
               value={doc.issuerLogoImage}
               onChange={(v) => {
@@ -1341,6 +1386,8 @@ function QuotationPage({
                 onChange={set('customerName')}
                 customers={customers}
                 onSelect={c => onSelectCustomer?.(c)}
+                onAddNew={onAddNewCustomer}
+                onEdit={onEditCustomer}
               />
             </p>
             {(doc.customerContactName || true) && (
@@ -1966,6 +2013,8 @@ export default function QuotationEditorPage() {
   const [dnFormDriver, setDnFormDriver] = useState('')
   const [dnSaving, setDnSaving] = useState(false)
   const [dnSaveError, setDnSaveError] = useState('')
+  const [dnPdfLoadingId, setDnPdfLoadingId] = useState<string | null>(null)
+  const [dnPdfError, setDnPdfError] = useState('')
   const [uploadModal, setUploadModal] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -2832,6 +2881,8 @@ export default function QuotationEditorPage() {
             customerId={doc.customerId}
             customers={customers}
             onSelectCustomer={c => selectCustomer(c)}
+            onAddNewCustomer={() => { openNewCustomer(); setShowCustomerPicker(true) }}
+            onEditCustomer={c => { openEditCustomer(c); setShowCustomerPicker(true) }}
           />
         </div>
       </div>
@@ -3584,16 +3635,23 @@ export default function QuotationEditorPage() {
                                   Mark Delivered
                                 </button>
                               )}
-                              <button
+                                <button
                                 onClick={async () => {
+                                  setDnPdfError('')
+                                  setDnPdfLoadingId(dn.id)
                                   try {
                                     const blobUrl = await deliveryNotesApi.getPdf(dn.id)
                                     openViewer(blobUrl, `Delivery Note — ${dn.delivery_no}`)
-                                  } catch { /* silent */ }
+                                  } catch (err: any) {
+                                    setDnPdfError(err?.response?.data?.detail ?? 'Could not load PDF.')
+                                  } finally {
+                                    setDnPdfLoadingId(null)
+                                  }
                                 }}
-                                className="text-[10px] text-blue-500 hover:underline"
+                                disabled={dnPdfLoadingId === dn.id}
+                                className="text-[10px] text-blue-500 hover:underline disabled:opacity-50"
                               >
-                                View PDF
+                                {dnPdfLoadingId === dn.id ? 'Loading…' : 'View PDF'}
                               </button>
                               <button
                                 onClick={() => handleDeleteDN(dn.id)}
@@ -3605,6 +3663,9 @@ export default function QuotationEditorPage() {
                           </div>
                         )
                       })}
+                      {dnPdfError && (
+                        <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">{dnPdfError}</p>
+                      )}
                       {!dnLoading && deliveryNotes.length === 0 && !showDNForm && (
                         <p className="text-xs text-gray-400 text-center py-2">No delivery notes yet.</p>
                       )}
@@ -3671,13 +3732,8 @@ export default function QuotationEditorPage() {
                     <>
                       {/* Logo + name */}
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg border border-gray-100 bg-blue-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                          <SafeImg
-                            src={doc.customerLogoImage}
-                            alt={doc.customerName}
-                            className="w-full h-full object-contain p-1"
-                            fallback={<span className="text-blue-600 font-bold text-lg">{(doc.customerName || '?')[0]}</span>}
-                          />
+                        <div className="w-12 h-12 rounded-lg border border-gray-100 bg-blue-50 flex items-center justify-center flex-shrink-0">
+                          <span className="text-blue-600 font-bold text-lg">{(doc.customerName || '?')[0].toUpperCase()}</span>
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-gray-800 truncate">{doc.customerName || '—'}</p>
@@ -3783,6 +3839,183 @@ export default function QuotationEditorPage() {
         url={viewer.url}
         onClose={closeViewer}
       />
+    )}
+
+    {/* ── Customer Add / Edit Modal ── */}
+    {showCustomerPicker && (pickerMode === 'new' || pickerMode === 'edit') && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-800">
+              {pickerMode === 'new' ? 'Add new customer' : 'Edit customer'}
+            </h2>
+            <button
+              onClick={() => { setShowCustomerPicker(false); setPickerMode('list') }}
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Logo row */}
+          <div className="px-6 pt-4 flex items-center gap-4">
+            <div
+              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-400 transition-colors bg-gray-50 flex-shrink-0"
+              onClick={() => custLogoInputRef.current?.click()}
+              title="Upload logo"
+            >
+              {custForm.logo
+                ? <img src={custForm.logo} alt="logo" className="w-full h-full object-contain" />
+                : <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 mb-1">Company logo</p>
+              <button
+                onClick={() => custLogoInputRef.current?.click()}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                {custForm.logo ? 'Change logo' : 'Upload logo'}
+              </button>
+              {custForm.logo && (
+                <button
+                  onClick={() => setCustForm(f => ({ ...f, logo: '' }))}
+                  className="ml-3 text-xs text-red-400 hover:underline"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <input
+              ref={custLogoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleCustLogoFileChange}
+            />
+          </div>
+
+          {/* Form fields */}
+          <div className="px-6 py-4 grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Company name <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={custForm.company}
+                onChange={e => setCustForm(f => ({ ...f, company: e.target.value }))}
+                placeholder="Acme Corp"
+                autoFocus
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Contact person</label>
+              <input
+                type="text"
+                value={custForm.contactName}
+                onChange={e => setCustForm(f => ({ ...f, contactName: e.target.value }))}
+                placeholder="Jane Smith"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+              <input
+                type="text"
+                value={custForm.phone}
+                onChange={e => setCustForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="+971 0 0000000"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <input
+                type="email"
+                value={custForm.email}
+                onChange={e => setCustForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="contact@company.com"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+              <input
+                type="text"
+                value={custForm.city}
+                onChange={e => setCustForm(f => ({ ...f, city: e.target.value }))}
+                placeholder="Dubai, UAE"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Industry / Branch</label>
+              <input
+                type="text"
+                value={custForm.industry}
+                onChange={e => setCustForm(f => ({ ...f, industry: e.target.value }))}
+                placeholder="Construction"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">TRN</label>
+              <input
+                type="text"
+                value={custForm.trn}
+                onChange={e => setCustForm(f => ({ ...f, trn: e.target.value }))}
+                placeholder="100123456700003"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              />
+            </div>
+
+            {/* Set as default toggle */}
+            <div className="col-span-2 flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="cust-default"
+                checked={custFormIsDefault}
+                onChange={e => setCustFormIsDefault(e.target.checked)}
+                className="rounded accent-blue-600"
+              />
+              <label htmlFor="cust-default" className="text-xs text-gray-500 cursor-pointer select-none">
+                Set as default customer for new quotations
+              </label>
+            </div>
+          </div>
+
+          {/* Error */}
+          {custSaveError && (
+            <p className="px-6 pb-2 text-xs text-red-500">{custSaveError}</p>
+          )}
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+            <button
+              onClick={() => { setShowCustomerPicker(false); setPickerMode('list') }}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveCustomerForm}
+              disabled={custSaving || !custForm.company.trim()}
+              className="px-5 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {custSaving && (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              )}
+              {pickerMode === 'new' ? 'Create customer' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   )

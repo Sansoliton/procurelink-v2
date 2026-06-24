@@ -6,8 +6,8 @@
 # Usage (run from repo root):
 #   docker compose -f deployment/docker-compose.yml up --build
 #
-# App available at: http://localhost:8080
-# API Docs        : http://localhost:8080/api/docs
+# App available at: http://localhost:40
+# API Docs        : http://localhost:40/api/docs
 
 services:
 
@@ -17,7 +17,7 @@ services:
       context: ./nginx
     container_name: pl_nginx
     ports:
-      - "8080:80"
+      - "40:80"
     depends_on:
       frontend:
         condition: service_healthy
@@ -54,8 +54,9 @@ services:
     environment:
       DATABASE_URL:    sqlite:////data/procurelink.db
       SECRET_KEY:      local-dev-secret-key-change-in-prod
-      ALLOWED_ORIGINS: http://localhost:8080
-      FRONTEND_URL:    http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:40
+      FRONTEND_URL:    http://localhost:40
+      UPLOAD_DIR:      /app/uploads
       ENVIRONMENT:     production
       DEBUG:           "false"
     volumes:

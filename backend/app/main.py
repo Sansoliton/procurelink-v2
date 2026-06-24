@@ -65,28 +65,48 @@ app = FastAPI(
     redoc_url="/redoc",
     root_path="/api",
     root_path_in_servers=False,
+    debug=settings.debug,
 )
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
-_cors_origins = {
-    settings.frontend_url,
-    "http://localhost:5173",
-    "http://localhost:3000",
-    *[o.strip() for o in settings.allowed_origins.split(",") if o.strip()],
-}
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=list(_cors_origins),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Debug: expose full traceback in 500 responses when DEBUG=true
+if settings.debug:
+    import traceback as _tb
+    async def _debug_exception_handler(request: Request, exc: Exception):
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(exc), "traceback": _tb.format_exc()},
+        )
+    app.add_exception_handler(Exception, _debug_exception_handler)
 
-# Prometheus metrics
-Instrumentator().instrument(app).expose(app)
+# CORS
+if settings.environment == "development":
+    # Allow any localhost port so Vite's auto-increment (5173, 5174…) always works
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://localhost(:\d+)?",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    _cors_origins = {
+        settings.frontend_url,
+        *[o.strip() for o in settings.allowed_origins.split(",") if o.strip()],
+    }
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(_cors_origins),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# Prometheus metrics (skip in dev — instrumentator 8.x crashes on _IncludedRouter in Starlette 1.3+)
+if settings.environment != "development":
+    Instrumentator().instrument(app).expose(app)
 
 # Routes
 app.include_router(auth_router)

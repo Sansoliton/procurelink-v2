@@ -14,8 +14,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 1440
     algorithm: str = "HS256"
 
-    # Storage — local filesystem mount path for all uploaded files and PDFs
-    upload_dir: str = "/app/uploads"
+    # Storage — local filesystem path for uploaded files.
+    # Default is a relative path that works for local dev (resolved from the
+    # backend/ working directory). Production overrides this via UPLOAD_DIR env var.
+    upload_dir: str = "./uploads"
 
     # Email
     smtp_host: str = "localhost"
